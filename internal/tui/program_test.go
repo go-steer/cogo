@@ -2,6 +2,7 @@ package tui
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/go-steer/cogo/internal/agent"
 	"github.com/go-steer/cogo/internal/config"
+	"github.com/go-steer/cogo/internal/mcp"
 	"github.com/go-steer/cogo/internal/memory"
 	"github.com/go-steer/cogo/internal/permissions"
 	"github.com/go-steer/cogo/internal/testutil"
@@ -103,6 +105,51 @@ func TestProgram_UnknownSlashShowsHint(t *testing.T) {
 		return bytes.Contains(out, []byte("Unknown command"))
 	}, teatest.WithDuration(2*time.Second))
 
+	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
+	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(2*time.Second))
+}
+
+func TestProgram_MCP_NoServersConfigured(t *testing.T) {
+	t.Parallel()
+	tm := newTestModel(t, nil)
+	tm.Type("/mcp")
+	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
+	teatest.WaitFor(t, tm.Output(), func(o []byte) bool {
+		return bytes.Contains(o, []byte("No MCP servers configured"))
+	}, teatest.WithDuration(2*time.Second))
+	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
+	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(2*time.Second))
+}
+
+func TestProgram_MCP_ListsConfiguredServers(t *testing.T) {
+	t.Parallel()
+	m, tm := newTestModelExposed(t, nil)
+	m.mcpServers = []*mcp.Server{
+		{Name: "github", Status: mcp.StatusOK},
+		{Name: "weather", Status: mcp.StatusError, Err: errors.New("connection refused")},
+	}
+	tm.Type("/mcp")
+	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
+	teatest.WaitFor(t, tm.Output(), func(o []byte) bool {
+		return bytes.Contains(o, []byte("github")) &&
+			bytes.Contains(o, []byte("weather")) &&
+			bytes.Contains(o, []byte("connection refused"))
+	}, teatest.WithDuration(2*time.Second))
+	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
+	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(2*time.Second))
+}
+
+func TestProgram_Skills_None(t *testing.T) {
+	t.Parallel()
+	tm := newTestModel(t, nil)
+	tm.Type("/skills")
+	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
+	teatest.WaitFor(t, tm.Output(), func(o []byte) bool {
+		return bytes.Contains(o, []byte("No skills discovered"))
+	}, teatest.WithDuration(2*time.Second))
 	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
 	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(2*time.Second))

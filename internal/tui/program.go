@@ -8,12 +8,15 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"google.golang.org/adk/tool"
 
 	"github.com/go-steer/cogo/internal/agent"
 	"github.com/go-steer/cogo/internal/config"
+	"github.com/go-steer/cogo/internal/mcp"
 	"github.com/go-steer/cogo/internal/memory"
 	"github.com/go-steer/cogo/internal/models"
 	"github.com/go-steer/cogo/internal/permissions"
+	"github.com/go-steer/cogo/internal/skills"
 	"github.com/go-steer/cogo/internal/tools"
 	"github.com/go-steer/cogo/internal/usage"
 )
@@ -87,8 +90,31 @@ func Run(ctx context.Context, cfg *config.Config, agentsDir string) (int, error)
 		fmt.Fprintf(os.Stderr, "cogo: memory load: %v\n", err)
 	}
 
+	// MCP servers + skills add to the toolsets the agent can use.
+	// Any failure here surfaces as a system message later (via
+	// /mcp / /skills) rather than blocking startup. We need a place
+	// to write those messages; before the program exists we collect
+	// them and replay into the model right after construction.
+	var earlyNotes []string
+	send := func(s string) { earlyNotes = append(earlyNotes, s) }
+
+	mcpServers, mcpToolsets, err := mcp.Build(ctx, agentsDir, send)
+	if err != nil {
+		earlyNotes = append(earlyNotes, "MCP load: "+err.Error())
+	}
+	skillsLoaded, err := skills.Load(ctx, agentsDir)
+	if err != nil {
+		earlyNotes = append(earlyNotes, "Skills load: "+err.Error())
+	}
+
+	allToolsets := append([]tool.Toolset{}, mcpToolsets...)
+	if !skillsLoaded.Empty() {
+		allToolsets = append(allToolsets, skillsLoaded.Toolset)
+	}
+
 	a, err := agent.New(llm,
 		agent.WithTools(registry.Tools),
+		agent.WithToolsets(allToolsets),
 		agent.WithSystemInstructionPrefix(loaded.Instruction),
 	)
 	if err != nil {
@@ -98,6 +124,11 @@ func Run(ctx context.Context, cfg *config.Config, agentsDir string) (int, error)
 	m.scope = gate.Scope()
 	m.memory = loaded
 	m.usage = usage.NewTracker()
+	m.mcpServers = mcpServers
+	m.skills = skillsLoaded
+	for _, note := range earlyNotes {
+		m.history.Append(Message{Role: RoleSystem, Text: note})
+	}
 
 	// rebuildAgent lets /model swap the model mid-session without the
 	// TUI having to know about the provider, gate, or tools layout.
@@ -108,6 +139,7 @@ func Run(ctx context.Context, cfg *config.Config, agentsDir string) (int, error)
 		}
 		return agent.New(newLLM,
 			agent.WithTools(registry.Tools),
+			agent.WithToolsets(allToolsets),
 			agent.WithSystemInstructionPrefix(loaded.Instruction),
 		)
 	}

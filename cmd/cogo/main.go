@@ -23,6 +23,7 @@ import (
 
 	"github.com/go-steer/cogo/internal/config"
 	"github.com/go-steer/cogo/internal/headless"
+	"github.com/go-steer/cogo/internal/initcmd"
 	"github.com/go-steer/cogo/internal/tui"
 
 	// Register the Gemini provider with models.Resolve.
@@ -36,6 +37,11 @@ func main() {
 // run is the testable main entry. Keeping it separate from main() lets
 // future tests drive flag parsing without forking a subprocess.
 func run(args []string, stdout, stderr *os.File) int {
+	// Subcommand dispatch first — `cogo init [args]`.
+	if len(args) > 0 && args[0] == "init" {
+		return initcmd.RunCLI(args[1:], stdout, stderr)
+	}
+
 	fs := flag.NewFlagSet("cogo", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 

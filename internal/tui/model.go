@@ -14,8 +14,10 @@ import (
 
 	"github.com/go-steer/cogo/internal/agent"
 	"github.com/go-steer/cogo/internal/config"
+	"github.com/go-steer/cogo/internal/mcp"
 	"github.com/go-steer/cogo/internal/memory"
 	"github.com/go-steer/cogo/internal/permissions"
+	"github.com/go-steer/cogo/internal/skills"
 	"github.com/go-steer/cogo/internal/usage"
 )
 
@@ -98,6 +100,11 @@ type Model struct {
 
 	// modelPicker is the open Model picker overlay, if any.
 	modelPicker *modelPickerState
+
+	// mcpServers + skills carry the discovered extensibility for
+	// /mcp + /skills rendering. Both are nil-safe.
+	mcpServers []*mcp.Server
+	skills     skills.Skills
 
 	// Pending permission request from the gate. Non-nil while the
 	// permission modal is up; the user's keypress writes back to
@@ -260,6 +267,61 @@ func (m *Model) renderMemoryInfo() string {
 		b.WriteString(" — ")
 		b.WriteString(formatBytes(s.Bytes))
 		b.WriteString(marker)
+		b.WriteByte('\n')
+	}
+	return b.String()
+}
+
+// renderMCPInfo formats the configured MCP servers for /mcp.
+// Each server is followed by an indented list of the tools it
+// exposes (the namespaced names the agent actually sees).
+func (m *Model) renderMCPInfo() string {
+	if len(m.mcpServers) == 0 {
+		return "No MCP servers configured. Drop a .agents/mcp.json describing servers (stdio or HTTP transport) to expose external tools to the agent."
+	}
+	var b strings.Builder
+	b.WriteString("MCP servers:\n")
+	for _, s := range m.mcpServers {
+		b.WriteString("  ")
+		b.WriteString(s.Name)
+		b.WriteString(" — ")
+		b.WriteString(s.Status)
+		if s.Err != nil {
+			b.WriteString(" (")
+			b.WriteString(s.Err.Error())
+			b.WriteString(")")
+		}
+		b.WriteByte('\n')
+		switch {
+		case s.Status != "ok":
+			// Skip tool list for failed servers.
+		case len(s.Tools) == 0:
+			b.WriteString("      (server exposes no tools, or enumeration failed)\n")
+		default:
+			for _, t := range s.Tools {
+				b.WriteString("      • ")
+				b.WriteString(t)
+				b.WriteByte('\n')
+			}
+		}
+	}
+	return b.String()
+}
+
+// renderSkillsInfo formats the discovered skills for /skills.
+func (m *Model) renderSkillsInfo() string {
+	if m.skills.Empty() {
+		return "No skills discovered. Drop SKILL.md bundles under .agents/skills/<name>/ to expose them to the agent."
+	}
+	var b strings.Builder
+	b.WriteString("Skills:\n")
+	for _, info := range m.skills.Infos {
+		b.WriteString("  ")
+		b.WriteString(info.Name)
+		if info.Description != "" {
+			b.WriteString(" — ")
+			b.WriteString(info.Description)
+		}
 		b.WriteByte('\n')
 	}
 	return b.String()

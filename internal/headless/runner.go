@@ -14,11 +14,15 @@ import (
 
 	adkmodel "google.golang.org/adk/model"
 
+	adktool "google.golang.org/adk/tool"
+
 	"github.com/go-steer/cogo/internal/agent"
 	"github.com/go-steer/cogo/internal/config"
+	"github.com/go-steer/cogo/internal/mcp"
 	"github.com/go-steer/cogo/internal/memory"
 	"github.com/go-steer/cogo/internal/models"
 	"github.com/go-steer/cogo/internal/permissions"
+	"github.com/go-steer/cogo/internal/skills"
 	"github.com/go-steer/cogo/internal/tools"
 	"github.com/go-steer/cogo/internal/usage"
 )
@@ -151,8 +155,25 @@ func RunFromConfig(ctx context.Context, cfg *config.Config, agentsDir, prompt st
 	tracker := usage.NewTracker()
 	pricing := usage.PriceFor(cfg.Model.Name, cfg)
 
+	// MCP servers + skills: notes (server connect failures, elicitation
+	// requests) flow to stderr in headless mode.
+	send := func(s string) { fmt.Fprintln(stderr, "cogo: "+s) }
+	_, mcpToolsets, mcpErr := mcp.Build(ctx, agentsDir, send)
+	if mcpErr != nil {
+		fmt.Fprintf(stderr, "cogo: mcp: %v\n", mcpErr)
+	}
+	skillsLoaded, skillsErr := skills.Load(ctx, agentsDir)
+	if skillsErr != nil {
+		fmt.Fprintf(stderr, "cogo: skills: %v\n", skillsErr)
+	}
+	allToolsets := append([]adktool.Toolset{}, mcpToolsets...)
+	if !skillsLoaded.Empty() {
+		allToolsets = append(allToolsets, skillsLoaded.Toolset)
+	}
+
 	opts := []agent.Option{
 		agent.WithTools(registry.Tools),
+		agent.WithToolsets(allToolsets),
 		agent.WithSystemInstructionPrefix(loaded.Instruction),
 	}
 	code, err := Run(ctx, m, prompt, stdout, stderr, tracker, pricing, opts...)

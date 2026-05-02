@@ -12,6 +12,8 @@ const (
 	SlashMemory  SlashAction = "memory"
 	SlashStats   SlashAction = "stats"
 	SlashModel   SlashAction = "model"
+	SlashMCP     SlashAction = "mcp"
+	SlashSkills  SlashAction = "skills"
 	SlashUnknown SlashAction = "unknown"
 )
 
@@ -28,6 +30,8 @@ var slashAliases = map[string]SlashAction{
 	"stats":  SlashStats,
 	"model":  SlashModel,
 	"models": SlashModel,
+	"mcp":    SlashMCP,
+	"skills": SlashSkills,
 }
 
 // ParseSlash inspects input. If it looks like a slash command (leading
@@ -81,6 +85,8 @@ func HelpText() string {
 		"  /stats      show per-turn token use and session totals",
 		"  /model      open the model picker (alias: /models)",
 		"  /model <id> switch to <id> directly without the picker",
+		"  /mcp        show configured MCP servers and their status",
+		"  /skills     show discovered skills",
 		"",
 		"Keys:",
 		"  PgUp/PgDn   scroll chat history",

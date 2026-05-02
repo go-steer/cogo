@@ -455,6 +455,14 @@ func (m *Model) handleSlash(action SlashAction, cmd, args string) (tea.Model, te
 		m.history.Append(Message{Role: RoleSystem, Text: m.renderStatsInfo()})
 		m.refreshViewport()
 		return m, nil
+	case SlashMCP:
+		m.history.Append(Message{Role: RoleSystem, Text: m.renderMCPInfo()})
+		m.refreshViewport()
+		return m, nil
+	case SlashSkills:
+		m.history.Append(Message{Role: RoleSystem, Text: m.renderSkillsInfo()})
+		m.refreshViewport()
+		return m, nil
 	case SlashModel:
 		return m.handleModelCommand(args)
 	case SlashQuit:

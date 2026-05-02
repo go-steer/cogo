@@ -2,7 +2,7 @@
 
 A terminal-native agentic CLI for Go developers — think *Claude Code* but Go-native, built on the Google ADK and Gemini 3.x. Configurable per project via a `.agents/` directory, with first-class support for MCP servers and Claude-compatible skills.
 
-> **Status:** V1 in active development. Slices 1–4a are up: `cogo -p "..."` runs an end-to-end one-shot prompt; `cogo` (no args, on a TTY) opens an interactive Bubble Tea chat with streaming output and markdown rendering; the agent has built-in tools (file I/O, bash, todo) gated by a permission system with a non-overridable bash denylist and per-project path scoping; project memory (`AGENTS.md` → `CLAUDE.md` → `GEMINI.md` fallback) is loaded into the system prompt; per-prompt and session-total cost / token usage are visible in the TUI and headless exit summary; mid-session model switching via `/model`. MCP, skills, and the `cogo init` wizard land in 4b. See [`docs/REQUIREMENTS.md`](./docs/REQUIREMENTS.md) for the full V1 scope and [`docs/SLICES.md`](./docs/SLICES.md) for the build order.
+> **Status:** V1 in active development. All Slice 4 features are up: full Claude-Code-like surface — TUI + tools + permissions + project memory + cost surfacing + `/model` picker + MCP servers + Claude-compatible skills + `cogo init` (silent + interactive wizard). Polish (OTEL, transcript persistence, goreleaser/CI, deletion of the spike binaries) lands in Slice 5. See [`docs/REQUIREMENTS.md`](./docs/REQUIREMENTS.md) for the full V1 scope and [`docs/SLICES.md`](./docs/SLICES.md) for the build order.
 
 ## Why
 
@@ -47,13 +47,16 @@ See [`.env.example`](./.env.example) for a copy-pasteable template.
 - Project memory (`AGENTS.md` → `CLAUDE.md` → `GEMINI.md` fallback at the project root, plus `~/.cogo/AGENTS.md` user-global) is loaded into the agent's system prompt at startup. Inspect via `/memory` (Slice 4a).
 - Per-prompt + session-total token / cost surfacing: each completed assistant turn shows `↑in · ↓out · $cost` underneath; the header carries a running session total; headless `cogo -p` prints a one-line exit summary on stderr. Use `/stats` for a full breakdown (Slice 4a).
 - Mid-session model switching: bare `/model` opens a picker; `/model gemini-3-flash-preview` switches directly. Persisted to `.agents/config.json` when a project config exists (Slice 4a).
+- **MCP server integration**: declare stdio or Streamable HTTP MCP servers in `.agents/mcp.json`; their tools become callable in the agent loop. `/mcp` shows server status. Elicitation handler is wired (declines with a notice; full schema-form modal lands in Slice 5 polish) (Slice 4b).
+- **Skills**: drop a Claude-compatible `SKILL.md` bundle under `.agents/skills/<name>/` and the agent can invoke it. `/skills` lists what's discovered. Body markdown loads lazily (Slice 4b).
+- **`cogo init`**: scaffolds `.agents/{config.json, .gitignore, AGENTS.md}` for a fresh project. Refuses to overwrite without `--force`. `cogo init --interactive` walks a Bubble Tea wizard for provider / model / permission mode (Slice 4b).
 - Ctrl+C cancels the current turn while streaming; a second press while idle exits.
 - Non-TTY invocation (piped stdin, CI) prints a hint pointing at `-p` and exits non-zero rather than hanging.
 - Both auth paths work (public Gemini API + Vertex AI).
 - `.agents/config.json` is auto-discovered (walks up from the working directory like `.git`); falls back to built-in defaults when absent.
 - Provider auto-detection from environment variables when `model.provider` is not set in config.
 
-MCP, skills, `cogo init`, OTEL wiring, and transcript persistence are not yet wired — those land in Slices 4b and 5.
+OTEL wiring, transcript persistence, the schema-driven elicitation modal, and goreleaser/CI land in Slice 5.
 
 ## Tests
 

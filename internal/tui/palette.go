@@ -54,6 +54,8 @@ func allSlashItems() []paletteItem {
 		{Display: "/memory", Value: "/memory", Hint: "show loaded memory files"},
 		{Display: "/stats", Value: "/stats", Hint: "session token + cost breakdown"},
 		{Display: "/model", Value: "/model", Hint: "open the model picker"},
+		{Display: "/mcp", Value: "/mcp", Hint: "configured MCP servers + status"},
+		{Display: "/skills", Value: "/skills", Hint: "discovered skill bundles"},
 		{Display: "/clear", Value: "/clear", Hint: "clear chat history"},
 		{Display: "/quit", Value: "/quit", Hint: "exit Cogo"},
 	}

@@ -56,6 +56,7 @@ type options struct {
 	userID      string
 	sessionID   string
 	tools       []tool.Tool
+	toolsets    []tool.Toolset
 }
 
 func defaultOptions() options {
@@ -93,6 +94,14 @@ func WithTools(ts []tool.Tool) Option {
 	return func(o *options) { o.tools = append(o.tools, ts...) }
 }
 
+// WithToolsets registers groups of tools (MCP servers, skills, ...).
+// Each Toolset implements google.golang.org/adk/tool.Toolset and is
+// passed to llmagent.Config.Toolsets. Slice 4b uses this for MCP and
+// skills; future slice can layer on more (subagents, etc.).
+func WithToolsets(ts []tool.Toolset) Option {
+	return func(o *options) { o.toolsets = append(o.toolsets, ts...) }
+}
+
 // WithSystemInstructionPrefix prepends prefix to the agent's default
 // instruction. Used for memory loading: AGENTS.md / CLAUDE.md /
 // GEMINI.md project memory becomes part of the system prompt rather
@@ -127,6 +136,7 @@ func New(model adkmodel.LLM, opts ...Option) (*Agent, error) {
 		Description: o.description,
 		Instruction: o.instruction,
 		Tools:       o.tools,
+		Toolsets:    o.toolsets,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("agent: build llmagent: %w", err)
