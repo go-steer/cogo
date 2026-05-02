@@ -2,6 +2,8 @@ package tui
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -94,6 +96,72 @@ func TestProgram_UnknownSlashShowsHint(t *testing.T) {
 
 	teatest.WaitFor(t, tm.Output(), func(out []byte) bool {
 		return bytes.Contains(out, []byte("Unknown command"))
+	}, teatest.WithDuration(2*time.Second))
+
+	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
+	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(2*time.Second))
+}
+
+func TestProgram_SlashPaletteOpensAndExecutes(t *testing.T) {
+	t.Parallel()
+	tm := newTestModel(t, nil)
+
+	tm.Type("/")
+	teatest.WaitFor(t, tm.Output(), func(o []byte) bool {
+		return bytes.Contains(o, []byte("Slash commands")) && bytes.Contains(o, []byte("/help"))
+	}, teatest.WithDuration(2*time.Second))
+
+	// Down to /clear, Enter triggers /clear flow.
+	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
+	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
+	teatest.WaitFor(t, tm.Output(), func(o []byte) bool {
+		return bytes.Contains(o, []byte("Clear chat history?"))
+	}, teatest.WithDuration(2*time.Second))
+
+	// Cancel the clear confirmation by typing "no" + enter, then exit.
+	tm.Type("no")
+	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
+	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
+	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(2*time.Second))
+}
+
+func TestProgram_FilePaletteFromAt(t *testing.T) {
+	t.Parallel()
+	// Move into a temp dir so listProjectFiles has a small known set.
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "alpha.md"), []byte("a"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "beta.md"), []byte("b"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	old, _ := os.Getwd()
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chdir(old) })
+
+	tm := newTestModel(t, nil)
+
+	// Trigger @-palette.
+	tm.Type("look at @")
+	teatest.WaitFor(t, tm.Output(), func(o []byte) bool {
+		return bytes.Contains(o, []byte("Files (")) &&
+			bytes.Contains(o, []byte("alpha.md")) && bytes.Contains(o, []byte("beta.md"))
+	}, teatest.WithDuration(2*time.Second))
+
+	// Filter to just alpha.
+	tm.Type("alp")
+	teatest.WaitFor(t, tm.Output(), func(o []byte) bool {
+		return bytes.Contains(o, []byte("alpha.md")) && !bytes.Contains(o, []byte("beta.md"))
+	}, teatest.WithDuration(2*time.Second))
+
+	// Enter inserts the @-path and closes the palette (no submission).
+	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
+	teatest.WaitFor(t, tm.Output(), func(o []byte) bool {
+		return bytes.Contains(o, []byte("@alpha.md ")) && !bytes.Contains(o, []byte("Files ("))
 	}, teatest.WithDuration(2*time.Second))
 
 	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})

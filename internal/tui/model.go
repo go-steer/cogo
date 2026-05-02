@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"os"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/spinner"
@@ -56,6 +57,15 @@ type Model struct {
 	// Slash-command state.
 	confirmingClear bool
 
+	// Open palette overlay (slash-command discovery or @-file picker).
+	// Non-nil while the overlay is visible; key handling intercepts
+	// up/down/enter/esc in that case.
+	palette *paletteState
+
+	// projectRoot is the resolved directory used as the source for the
+	// @-file picker; defaults to the cwd at NewModel time.
+	projectRoot string
+
 	// Pending permission request from the gate. Non-nil while the
 	// permission modal is up; the user's keypress writes back to
 	// pendingConfirm.Out and clears this field.
@@ -93,6 +103,8 @@ func NewModel(cfg *config.Config, a *agent.Agent, mdStyle string) *Model {
 
 	md, _ := NewMarkdownRenderer(80, mdStyle) // tightened on first WindowSizeMsg
 
+	cwd, _ := os.Getwd()
+
 	m := &Model{
 		cfg:                 cfg,
 		agent:               a,
@@ -105,6 +117,7 @@ func NewModel(cfg *config.Config, a *agent.Agent, mdStyle string) *Model {
 		mdStyle:             mdStyle,
 		state:               StateIdle,
 		currentAssistantIdx: -1,
+		projectRoot:         cwd,
 	}
 	return m
 }

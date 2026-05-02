@@ -119,6 +119,28 @@ func (m *Model) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Palette intercepts up/down/enter/esc when open.
+	if m.palette != nil {
+		switch msg.String() {
+		case "up":
+			if m.palette.cursor > 0 {
+				m.palette.cursor--
+			}
+			return m, nil
+		case "down":
+			if m.palette.cursor < len(m.palette.items)-1 {
+				m.palette.cursor++
+			}
+			return m, nil
+		case "esc":
+			m.palette = nil
+			return m, nil
+		case "enter":
+			return m.applyPaletteSelection()
+		}
+		// Other keys fall through to the textarea (typing filters the palette).
+	}
+
 	switch {
 	case key.Matches(msg, m.keys.Cancel):
 		return m.handleCtrlC()
@@ -159,7 +181,85 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// state-machine race when the turn ends mid-typing.
 	var cmd tea.Cmd
 	m.textarea, cmd = m.textarea.Update(msg)
+
+	// After the textarea consumes the key, re-evaluate whether a
+	// palette should be open or closed.
+	m.refreshPalette()
 	return m, cmd
+}
+
+// refreshPalette syncs m.palette with the textarea state. Called after
+// any keystroke that may have changed the input.
+func (m *Model) refreshPalette() {
+	value := m.textarea.Value()
+	cursor := len(value) // bubbles textarea uses byte offsets; cursor approximated as end
+	kind, triggerPos, filter, ok := detectPaletteTrigger(value, cursor)
+	if !ok {
+		m.palette = nil
+		return
+	}
+	var items []paletteItem
+	switch kind {
+	case paletteSlash:
+		items = filterPaletteItems(allSlashItems(), filter)
+	case paletteFile:
+		items = listProjectFiles(m.projectRoot, filter)
+	}
+	if len(items) == 0 {
+		m.palette = nil
+		return
+	}
+	cur := 0
+	if m.palette != nil && m.palette.kind == kind {
+		// Preserve cursor if still in range; otherwise clamp.
+		cur = m.palette.cursor
+		if cur >= len(items) {
+			cur = len(items) - 1
+		}
+		if cur < 0 {
+			cur = 0
+		}
+	}
+	m.palette = &paletteState{
+		kind:       kind,
+		items:      items,
+		cursor:     cur,
+		triggerPos: triggerPos,
+		filter:     filter,
+	}
+	if kind == paletteSlash {
+		m.palette.trigger = '/'
+	} else {
+		m.palette.trigger = '@'
+	}
+}
+
+// applyPaletteSelection acts on Enter while the palette is open. Slash
+// items: replace the input with the selected command and submit
+// immediately. File items: insert the @-path at the trigger position
+// and keep typing.
+func (m *Model) applyPaletteSelection() (tea.Model, tea.Cmd) {
+	if m.palette == nil || len(m.palette.items) == 0 {
+		return m, nil
+	}
+	sel := m.palette.items[m.palette.cursor]
+	switch m.palette.kind {
+	case paletteSlash:
+		m.palette = nil
+		m.textarea.SetValue(sel.Value)
+		return m.handleSubmit()
+	case paletteFile:
+		// Replace the partial @-token (from triggerPos to current end)
+		// with the selected value, plus a trailing space so the user
+		// can keep typing.
+		current := m.textarea.Value()
+		newVal := current[:m.palette.triggerPos] + sel.Value + " "
+		m.textarea.SetValue(newVal)
+		// SetValue moves cursor to end; that's the right place.
+		m.palette = nil
+		return m, nil
+	}
+	return m, nil
 }
 
 func (m *Model) handleCtrlC() (tea.Model, tea.Cmd) {
@@ -206,16 +306,27 @@ func (m *Model) handleSubmit() (tea.Model, tea.Cmd) {
 		return m.handleSlash(action, cmd)
 	}
 
-	// Regular prompt → start a turn.
+	// Regular prompt → start a turn. Expand any @<path> file references
+	// before sending to the model; show the user-facing prompt as-typed
+	// in history (preserving the @ tokens) but pass the expanded form
+	// to the agent so it has the file contents inline.
 	m.history.Append(Message{Role: RoleUser, Text: input})
+	expanded, refs, diags := expandAtRefs(input, readFileSafe(64*1024))
+	for _, d := range diags {
+		m.history.Append(Message{Role: RoleSystem, Text: d})
+	}
+	if len(refs) > 0 {
+		m.history.Append(Message{Role: RoleSystem, Text: "Inlined file references: " + strings.Join(refs, ", ")})
+	}
 	m.textarea.Reset()
+	m.palette = nil
 	idx := m.history.Append(Message{Role: RoleAssistant})
 	m.currentAssistantIdx = idx
 	m.state = StateStreaming
 
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancelTurn = cancel
-	startAgentTurn(ctx, m.program, m.agent, input)
+	startAgentTurn(ctx, m.program, m.agent, expanded)
 
 	m.refreshViewport()
 	return m, m.spinner.Tick

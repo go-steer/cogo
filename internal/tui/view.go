@@ -11,6 +11,7 @@ import (
 //
 //	Header
 //	Viewport (scrollable history)
+//	Palette (slash / file picker — only when active)
 //	Input area (textarea inside a rounded border) — replaced by the
 //	  permission modal when a request is pending
 //	Footer (status hint or spinner)
@@ -30,7 +31,63 @@ func (m *Model) View() string {
 	}
 	footer := m.renderFooter()
 
-	return lipgloss.JoinVertical(lipgloss.Left, header, body, input, footer)
+	parts := []string{header, body}
+	if m.palette != nil {
+		parts = append(parts, m.renderPalette())
+	}
+	parts = append(parts, input, footer)
+	return lipgloss.JoinVertical(lipgloss.Left, parts...)
+}
+
+// renderPalette draws the palette overlay between the viewport and the
+// input area. Cursor row is highlighted; non-cursor rows are muted.
+func (m *Model) renderPalette() string {
+	p := m.palette
+	rows := len(p.items)
+	if rows > MaxPaletteRows {
+		rows = MaxPaletteRows
+	}
+	// Window items so the cursor stays in view.
+	start := 0
+	if p.cursor >= rows {
+		start = p.cursor - rows + 1
+	}
+	end := start + rows
+	if end > len(p.items) {
+		end = len(p.items)
+	}
+
+	var lines []string
+	for i := start; i < end; i++ {
+		it := p.items[i]
+		marker := "  "
+		if i == p.cursor {
+			marker = "▸ "
+		}
+		line := marker + it.Display
+		if it.Hint != "" {
+			line += "  " + it.Hint
+		}
+		if i == p.cursor {
+			lines = append(lines, m.styles.HeaderAccent.Render(line))
+		} else {
+			lines = append(lines, m.styles.Footer.Render(line))
+		}
+	}
+	header := "  " + paletteHeader(p)
+	body := strings.Join(lines, "\n")
+	return m.styles.InputBorder.Render(m.styles.System.Render(header) + "\n" + body)
+}
+
+func paletteHeader(p *paletteState) string {
+	switch p.kind {
+	case paletteSlash:
+		return "Slash commands (↑/↓ select · enter run · esc cancel)"
+	case paletteFile:
+		return "Files (↑/↓ select · enter insert · esc cancel)"
+	default:
+		return ""
+	}
 }
 
 // renderConfirmModal draws the permission request modal in place of

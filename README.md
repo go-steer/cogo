@@ -41,6 +41,7 @@ See [`.env.example`](./.env.example) for a copy-pasteable template.
 
 - `cogo -p "<prompt>"` runs a single turn and streams the assistant's response to stdout (Slice 1).
 - `cogo` (no args, on a TTY) opens an interactive Bubble Tea chat: streaming text in real time, markdown rendering on completion, multi-line input (Shift+Enter for newline), and `/help` / `/clear` / `/quit` slash commands (Slice 2).
+- Type `/` at the start of an empty prompt to open a slash-command palette; type `@` anywhere to open a file picker. Selecting a file inserts `@<path>` and the file contents are inlined when you submit the message.
 - Built-in tools the agent can call: `read_file`, `write_file`, `edit_file`, `list_dir`, `bash`, `todo`. Tool output is truncated when it exceeds the per-tool caps in `tool_output` config (Slice 3).
 - Permission system with `ask` / `allow` / `yolo` modes: an in-TUI modal prompts before mutating ops with **y** (allow once) / **s** (allow this session) / **a** (always allow, persisted) / **n** or **esc** (deny). A non-overridable bash denylist refuses things like `rm -rf /`. Path scoping confines file tools to the project root + `~/.cogo/` + any explicit `path_scope.allow` entries (Slice 3).
 - Ctrl+C cancels the current turn while streaming; a second press while idle exits.
