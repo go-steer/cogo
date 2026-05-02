@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -127,9 +128,11 @@ func TestProgram_Reload_InstallsResult(t *testing.T) {
 	t.Parallel()
 	m, tm := newTestModelExposed(t, nil)
 
-	called := 0
+	// Atomic so the program goroutine that increments and the test
+	// goroutine that asserts synchronize properly under -race.
+	var called atomic.Int32
 	m.reloadFromDisk = func() (reloadResult, error) {
-		called++
+		called.Add(1)
 		newAgent, _ := agent.New(&testutil.FakeModel{ModelName: "after"})
 		return reloadResult{
 			Agent:  newAgent,
@@ -142,8 +145,8 @@ func TestProgram_Reload_InstallsResult(t *testing.T) {
 	teatest.WaitFor(t, tm.Output(), func(o []byte) bool {
 		return bytes.Contains(o, []byte("Reloaded .agents/ from disk"))
 	}, teatest.WithDuration(2*time.Second))
-	if called != 1 {
-		t.Errorf("reloadFromDisk called %d times, want 1", called)
+	if got := called.Load(); got != 1 {
+		t.Errorf("reloadFromDisk called %d times, want 1", got)
 	}
 
 	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
@@ -261,10 +264,14 @@ func TestProgram_ModelPickerAndDirectSwitch(t *testing.T) {
 	t.Parallel()
 	m, tm := newTestModelExposed(t, nil)
 
-	// Wire a stub rebuilder so /model can complete without a real provider.
-	rebuilt := ""
+	// Wire a stub rebuilder so /model can complete without a real
+	// provider. atomic.Pointer so the assignment from the program
+	// goroutine and the read from the test goroutine synchronize
+	// properly under -race.
+	var rebuilt atomic.Pointer[string]
 	m.rebuildAgent = func(id string) (*agent.Agent, error) {
-		rebuilt = id
+		copyID := id
+		rebuilt.Store(&copyID)
 		return agent.New(&testutil.FakeModel{ModelName: id})
 	}
 
@@ -287,8 +294,8 @@ func TestProgram_ModelPickerAndDirectSwitch(t *testing.T) {
 	teatest.WaitFor(t, tm.Output(), func(o []byte) bool {
 		return bytes.Contains(o, []byte("Switched to gemini-3-flash-preview"))
 	}, teatest.WithDuration(2*time.Second))
-	if rebuilt != "gemini-3-flash-preview" {
-		t.Errorf("rebuildAgent called with %q, want gemini-3-flash-preview", rebuilt)
+	if got := rebuilt.Load(); got == nil || *got != "gemini-3-flash-preview" {
+		t.Errorf("rebuildAgent called with %v, want gemini-3-flash-preview", got)
 	}
 
 	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
@@ -482,9 +489,12 @@ func TestProgram_PermissionModalAlwaysCallsHook(t *testing.T) {
 	t.Parallel()
 	m, tm := newTestModelExposed(t, nil)
 
-	var got *permissions.PromptRequest
+	// atomic.Pointer so the program goroutine that runs AlwaysAllow
+	// and the test goroutine that asserts on the captured request
+	// synchronize properly under -race.
+	var got atomic.Pointer[permissions.PromptRequest]
 	m.AlwaysAllow = func(req permissions.PromptRequest) error {
-		got = &req
+		got.Store(&req)
 		return nil
 	}
 
@@ -508,8 +518,8 @@ func TestProgram_PermissionModalAlwaysCallsHook(t *testing.T) {
 		t.Errorf("decision = %v, want allow-always", d)
 	}
 	// Persistence hook should have fired.
-	if got == nil || got.PersistKey != "/var/log" {
-		t.Errorf("AlwaysAllow hook not called with expected req: %+v", got)
+	if g := got.Load(); g == nil || g.PersistKey != "/var/log" {
+		t.Errorf("AlwaysAllow hook not called with expected req: %+v", g)
 	}
 
 	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
