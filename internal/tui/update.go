@@ -463,6 +463,8 @@ func (m *Model) handleSlash(action SlashAction, cmd, args string) (tea.Model, te
 		m.history.Append(Message{Role: RoleSystem, Text: m.renderSkillsInfo()})
 		m.refreshViewport()
 		return m, nil
+	case SlashReload:
+		return m.handleReload()
 	case SlashModel:
 		return m.handleModelCommand(args)
 	case SlashQuit:
@@ -472,6 +474,30 @@ func (m *Model) handleSlash(action SlashAction, cmd, args string) (tea.Model, te
 		m.refreshViewport()
 		return m, nil
 	}
+}
+
+// handleReload re-reads .agents/ from disk and swaps the agent in
+// place. Existing chat history and usage totals are preserved so the
+// session feels continuous.
+func (m *Model) handleReload() (tea.Model, tea.Cmd) {
+	if m.reloadFromDisk == nil {
+		m.history.Append(Message{Role: RoleError, Text: "Reload not available (no project root or builder not configured)."})
+		m.refreshViewport()
+		return m, nil
+	}
+	res, err := m.reloadFromDisk()
+	if err != nil {
+		m.history.Append(Message{Role: RoleError, Text: "Reload failed: " + err.Error()})
+		m.refreshViewport()
+		return m, nil
+	}
+	m.agent = res.Agent
+	m.memory = res.Memory
+	m.mcpServers = res.MCPServers
+	m.skills = res.Skills
+	m.history.Append(Message{Role: RoleSystem, Text: "Reloaded .agents/ from disk. Memory + MCP servers + skills refreshed; chat history and usage totals preserved."})
+	m.refreshViewport()
+	return m, nil
 }
 
 // handleModelCommand handles `/model` (no args → open picker) and

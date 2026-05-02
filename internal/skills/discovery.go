@@ -22,6 +22,9 @@ import (
 	adktool "google.golang.org/adk/tool"
 	"google.golang.org/adk/tool/skilltoolset"
 	"google.golang.org/adk/tool/skilltoolset/skill"
+
+	"github.com/go-steer/cogo/internal/permissions"
+	cogotools "github.com/go-steer/cogo/internal/tools"
 )
 
 // SkillDirName is the project-local directory holding skill bundles.
@@ -46,7 +49,10 @@ func (s Skills) Empty() bool { return s.Toolset == nil }
 // Load discovers skills under agentsDir/skills/. A missing directory
 // (or empty agentsDir) yields a zero Skills with no error — most
 // projects don't use skills.
-func Load(ctx context.Context, agentsDir string) (Skills, error) {
+//
+// gate (optional) wraps the resulting toolset so skill invocations go
+// through Cogo's permission system. Pass nil to skip gating.
+func Load(ctx context.Context, agentsDir string, gate *permissions.Gate) (Skills, error) {
 	if agentsDir == "" {
 		return Skills{}, nil
 	}
@@ -72,9 +78,13 @@ func Load(ctx context.Context, agentsDir string) (Skills, error) {
 		return Skills{}, nil
 	}
 
-	ts, err := skilltoolset.New(ctx, skilltoolset.Config{Source: source})
+	skillTS, err := skilltoolset.New(ctx, skilltoolset.Config{Source: source})
 	if err != nil {
 		return Skills{}, fmt.Errorf("skills: build toolset: %w", err)
+	}
+	var ts adktool.Toolset = skillTS
+	if gate != nil {
+		ts = cogotools.GateToolset(ts, gate, "skill")
 	}
 
 	infos := make([]Info, 0, len(frontmatters))

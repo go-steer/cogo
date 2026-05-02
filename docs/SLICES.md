@@ -139,9 +139,8 @@ Each slice gets its own detailed plan written **at the start of that slice** (in
 - `internal/telemetry/` — OTEL setup that calls `providers.SetGlobalOtelProviders()` (per spike finding); env-driven exporter selection (`none` / `console` / `otlp`); `--otel=console` flag.
 - `internal/session/` — transcript writer; persists `.agents/sessions/<timestamp>.json` on `/quit` and Ctrl+C; atomic temp + rename.
 - `internal/log/` — `--debug` flips slog handler to a JSONL handler writing under `.agents/logs/<timestamp>.jsonl`.
-- **Permission-gate parity for MCP + skill tools** — Slice 4b wired MCP and skill toolsets, but only Cogo's built-in tool handlers explicitly call `permissions.Gate.Check*`. MCP-namespaced tools (`<server>.<tool>`) and skill-invoked tools currently bypass the gate. Wrap each external toolset in `tool.WithConfirmation` (or a similar decorator) so the same `ask` / `allow` / `yolo` mode applies, the bash denylist still rejects shell-style invocations, and the modal prompt UX is consistent across built-in and external tools. One-evening polish; defer-blocker for v1.0.
 - **Schema-driven MCP elicitation modal** — Slice 4b stubs `ElicitationHandler` to decline-with-notice. Build a Bubble Tea form that renders the request's JSON Schema (text inputs for strings, lists for enums, etc.), wired through a channel like the permission flow.
-- **`/reload` slash command** — re-read everything from `.agents/` (`mcp.json`, `skills/`, `AGENTS.md`, `config.json`) and rebuild the agent in place, the same way `/model` swaps the model. Today users have to quit and relaunch to pick up edits to `mcp.json` / skills / memory; this throws away in-session chat context. Implementation: extend the existing `rebuildAgent` closure in `internal/tui/program.go` so it re-runs `mcp.Build`, `skills.Load`, and `memory.Load` per call, and add a `Close` path so old MCP stdio child processes get reaped instead of leaking. Single `/reload` (no args) refreshes everything; per-server reload + filesystem auto-watch are explicitly out of scope.
+- **MCP child-process cleanup on `/reload`** — `/reload` (shipped in 5b) rebuilds the agent in place, but the previous MCP toolsets aren't cleanly torn down because `mcptoolset` doesn't expose `Close`. Stdio child processes from old generations get reaped only when Cogo exits. For long sessions with many reloads this leaks. Either build our own thin `mcp.Client` wrapper that exposes `Close`, or upstream a `Close` accessor on `mcptoolset`. One-day polish.
 - Top-level:
   - `.goreleaser.yaml` — cross-platform builds (linux/darwin × amd64/arm64); checksums; archive layout.
   - `.github/workflows/ci.yml` — `go test ./...` on push/PR across a small Go matrix.
@@ -164,7 +163,6 @@ Each slice gets its own detailed plan written **at the start of that slice** (in
 - `cogo --debug -p "ping"` emits a JSONL debug log.
 - `cogo` exit (via `/quit` or Ctrl+C) writes a transcript readable as JSON.
 - `cogo --otel=console -p "ping"` prints OTEL spans to stderr; with `OTEL_EXPORTER_OTLP_ENDPOINT` set, spans go to the collector.
-- MCP tools and skills go through the permission gate the same way built-in tools do — `bash`-equivalent denylist patterns still refuse, the modal still pops in `ask` mode, and `yolo` still skips the prompt.
 - An MCP server that calls `elicit` produces a TUI modal asking the user; on accept, the server gets the form data; on decline, it gets the same decline outcome it does today.
 - `/reload` rebuilds the agent in place from a fresh read of `.agents/`; old MCP stdio child processes are torn down rather than leaked.
 - `cmd/spike/` and `cmd/probe-models/` no longer exist.

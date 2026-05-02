@@ -11,7 +11,15 @@ import (
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"google.golang.org/adk/tool"
 	"google.golang.org/adk/tool/mcptoolset"
+
+	"github.com/go-steer/cogo/internal/permissions"
+	cogotools "github.com/go-steer/cogo/internal/tools"
 )
+
+// toolsGateToolset is a tiny indirection so the import alias stays
+// readable inside startOne — internal/tools and the local "tools"
+// alias of mcptoolset don't collide visually.
+var toolsGateToolset = cogotools.GateToolset
 
 // Status values surfaced via /mcp.
 const (
@@ -37,9 +45,14 @@ func (s *Server) Toolset() tool.Toolset { return s.toolset }
 // handler so Cogo can surface elicitation requests in the right place
 // (TUI system message vs headless stderr).
 //
+// gate (optional) gates each MCP tool call through Cogo's permission
+// system so MCP tools are subject to the same ask/allow/yolo rules
+// as built-in tools. Pass nil to skip gating (Slice 4b shipped this
+// way; 5b adds the wrap).
+//
 // Servers that fail to start come back with Status==StatusError so
 // they're visible in /mcp without breaking the rest of the agent.
-func Build(ctx context.Context, agentsDir string, send func(string)) ([]*Server, []tool.Toolset, error) {
+func Build(ctx context.Context, agentsDir string, send func(string), gate *permissions.Gate) ([]*Server, []tool.Toolset, error) {
 	cfg, err := Load(agentsDir)
 	if err != nil {
 		return nil, nil, err
@@ -55,7 +68,7 @@ func Build(ctx context.Context, agentsDir string, send func(string)) ([]*Server,
 		wg.Add(1)
 		go func(name string, spec ServerSpec) {
 			defer wg.Done()
-			srv := startOne(ctx, name, spec, send)
+			srv := startOne(ctx, name, spec, send, gate)
 			mu.Lock()
 			out = append(out, srv)
 			mu.Unlock()
@@ -77,7 +90,7 @@ func Build(ctx context.Context, agentsDir string, send func(string)) ([]*Server,
 // startOne instantiates one server. Errors are stored on the Server
 // rather than returned so a single broken server doesn't prevent the
 // rest of the registry from coming up.
-func startOne(ctx context.Context, name string, spec ServerSpec, send func(string)) *Server {
+func startOne(ctx context.Context, name string, spec ServerSpec, send func(string), gate *permissions.Gate) *Server {
 	srv := &Server{Name: name}
 
 	transport, err := transportFor(spec)
@@ -105,6 +118,12 @@ func startOne(ctx context.Context, name string, spec ServerSpec, send func(strin
 	// Underscore separator because Gemini's function-name regex is
 	// `[A-Za-z0-9_]{1,64}` — a `.` would be rejected.
 	wrapped := withNamespace(ts, name)
+	// Then wrap with the permission gate so MCP tool calls go through
+	// the same ask/allow/yolo flow as built-in tools. Allowlist
+	// patterns use the "mcp" namespace, e.g. "mcp:filesystem_read_file".
+	if gate != nil {
+		wrapped = toolsGateToolset(wrapped, gate, "mcp")
+	}
 	srv.toolset = wrapped
 	srv.Status = StatusOK
 	// Enumerate tool names so /mcp can list them. We pass a minimal

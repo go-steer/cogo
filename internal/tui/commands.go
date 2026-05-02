@@ -14,6 +14,7 @@ const (
 	SlashModel   SlashAction = "model"
 	SlashMCP     SlashAction = "mcp"
 	SlashSkills  SlashAction = "skills"
+	SlashReload  SlashAction = "reload"
 	SlashUnknown SlashAction = "unknown"
 )
 
@@ -32,6 +33,7 @@ var slashAliases = map[string]SlashAction{
 	"models": SlashModel,
 	"mcp":    SlashMCP,
 	"skills": SlashSkills,
+	"reload": SlashReload,
 }
 
 // ParseSlash inspects input. If it looks like a slash command (leading
@@ -87,6 +89,7 @@ func HelpText() string {
 		"  /model <id> switch to <id> directly without the picker",
 		"  /mcp        show configured MCP servers and their status",
 		"  /skills     show discovered skills",
+		"  /reload     re-read .agents/ from disk (mcp.json, skills/, AGENTS.md, config.json)",
 		"",
 		"Keys:",
 		"  PgUp/PgDn   scroll chat history",

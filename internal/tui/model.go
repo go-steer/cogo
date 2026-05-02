@@ -93,6 +93,11 @@ type Model struct {
 	// gate / tools wiring.
 	rebuildAgent func(modelID string) (*agent.Agent, error)
 
+	// reloadFromDisk re-reads .agents/ (mcp.json, skills/, AGENTS.md,
+	// config.json) and rebuilds the agent in place. The new agent +
+	// state get installed on the model. Set by program.go; nil-safe.
+	reloadFromDisk func() (reloadResult, error)
+
 	// persistModelChoice saves the new model choice to
 	// .agents/config.json when invoked. May be nil if no project
 	// config exists; in that case the switch is in-session only.
@@ -246,6 +251,15 @@ func (m *Model) refreshViewport() {
 	if atBottom {
 		m.viewport.GotoBottom()
 	}
+}
+
+// reloadResult is what reloadFromDisk hands back to the model so the
+// fresh state can be installed in one atomic update.
+type reloadResult struct {
+	Agent      *agent.Agent
+	Memory     memory.Loaded
+	MCPServers []*mcp.Server
+	Skills     skills.Skills
 }
 
 // renderMemoryInfo formats the loaded-memory provenance for /memory.

@@ -170,11 +170,11 @@ func RunFromConfig(ctx context.Context, cfg *config.Config, agentsDir, prompt st
 	// MCP servers + skills: notes (server connect failures, elicitation
 	// requests) flow to stderr in headless mode.
 	send := func(s string) { fmt.Fprintln(stderr, "cogo: "+s) }
-	_, mcpToolsets, mcpErr := mcp.Build(ctx, agentsDir, send)
+	_, mcpToolsets, mcpErr := mcp.Build(ctx, agentsDir, send, gate)
 	if mcpErr != nil {
 		fmt.Fprintf(stderr, "cogo: mcp: %v\n", mcpErr)
 	}
-	skillsLoaded, skillsErr := skills.Load(ctx, agentsDir)
+	skillsLoaded, skillsErr := skills.Load(ctx, agentsDir, gate)
 	if skillsErr != nil {
 		fmt.Fprintf(stderr, "cogo: skills: %v\n", skillsErr)
 	}

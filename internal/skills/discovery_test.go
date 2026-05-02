@@ -9,7 +9,7 @@ import (
 
 func TestLoad_NoSkillsDir(t *testing.T) {
 	t.Parallel()
-	got, err := Load(context.Background(), t.TempDir())
+	got, err := Load(context.Background(), t.TempDir(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -20,7 +20,7 @@ func TestLoad_NoSkillsDir(t *testing.T) {
 
 func TestLoad_EmptyAgentsDir(t *testing.T) {
 	t.Parallel()
-	got, err := Load(context.Background(), "")
+	got, err := Load(context.Background(), "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +46,7 @@ When asked about the weather, reply with a witty observation about the sky.`
 		t.Fatal(err)
 	}
 
-	got, err := Load(context.Background(), dir)
+	got, err := Load(context.Background(), dir, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +67,7 @@ func TestLoad_EmptySkillsDir(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(dir, SkillDirName), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	got, err := Load(context.Background(), dir)
+	got, err := Load(context.Background(), dir, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

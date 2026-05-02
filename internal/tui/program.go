@@ -111,11 +111,11 @@ func Run(ctx context.Context, cfg *config.Config, agentsDir string) (int, error)
 	var earlyNotes []string
 	send := func(s string) { earlyNotes = append(earlyNotes, s) }
 
-	mcpServers, mcpToolsets, err := mcp.Build(ctx, agentsDir, send)
+	mcpServers, mcpToolsets, err := mcp.Build(ctx, agentsDir, send, gate)
 	if err != nil {
 		earlyNotes = append(earlyNotes, "MCP load: "+err.Error())
 	}
-	skillsLoaded, err := skills.Load(ctx, agentsDir)
+	skillsLoaded, err := skills.Load(ctx, agentsDir, gate)
 	if err != nil {
 		earlyNotes = append(earlyNotes, "Skills load: "+err.Error())
 	}
@@ -164,6 +164,47 @@ func Run(ctx context.Context, cfg *config.Config, agentsDir string) (int, error)
 			}
 			c.Model.Name = modelID
 			return config.Save(filepath.Join(agentsDir, config.ConfigFileName), c)
+		}
+	}
+
+	// /reload pulls everything fresh from disk: memory + MCP + skills.
+	// We only offer it when there's a project root to read from.
+	if agentsDir != "" {
+		m.reloadFromDisk = func() (reloadResult, error) {
+			newMemory, err := memory.Load(projectRoot, cogoHome)
+			if err != nil {
+				return reloadResult{}, fmt.Errorf("memory: %w", err)
+			}
+			newMCPServers, newMCPToolsets, err := mcp.Build(ctx, agentsDir, send, gate)
+			if err != nil {
+				return reloadResult{}, fmt.Errorf("mcp: %w", err)
+			}
+			newSkills, err := skills.Load(ctx, agentsDir, gate)
+			if err != nil {
+				return reloadResult{}, fmt.Errorf("skills: %w", err)
+			}
+			toolsets := append([]tool.Toolset{}, newMCPToolsets...)
+			if !newSkills.Empty() {
+				toolsets = append(toolsets, newSkills.Toolset)
+			}
+			newLLM, err := provider.Model(ctx, m.cfg.Model.Name)
+			if err != nil {
+				return reloadResult{}, fmt.Errorf("model: %w", err)
+			}
+			newAgent, err := agent.New(newLLM,
+				agent.WithTools(registry.Tools),
+				agent.WithToolsets(toolsets),
+				agent.WithSystemInstructionPrefix(newMemory.Instruction),
+			)
+			if err != nil {
+				return reloadResult{}, fmt.Errorf("agent: %w", err)
+			}
+			return reloadResult{
+				Agent:      newAgent,
+				Memory:     newMemory,
+				MCPServers: newMCPServers,
+				Skills:     newSkills,
+			}, nil
 		}
 	}
 

@@ -95,6 +95,17 @@ func (g *Gate) Mode() Mode { return g.mode }
 // also persist the change via the config layer.
 func (g *Gate) Scope() *PathScope { return g.scope }
 
+// CheckGeneric gates an arbitrary tool call (used by MCP and skill
+// toolsets, where we don't have a dedicated Check<Tool> method).
+//
+// toolName is the namespace under which policy lookups happen
+// (typically "mcp" or "skill"); key is the human-readable detail
+// shown in prompts (typically the tool's full namespaced name plus
+// a brief argument summary).
+func (g *Gate) CheckGeneric(ctx context.Context, toolName, key string) error {
+	return g.gateRequest(ctx, PromptKindGeneric, toolName, key, toolName, key)
+}
+
 // CheckBash gates a bash invocation. The denylist is checked first and
 // is non-overridable. After that, policy + mode determine whether the
 // call needs a prompt.

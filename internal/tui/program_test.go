@@ -110,6 +110,47 @@ func TestProgram_UnknownSlashShowsHint(t *testing.T) {
 	tm.WaitFinished(t, teatest.WithFinalTimeout(2*time.Second))
 }
 
+func TestProgram_Reload_NoBuilder(t *testing.T) {
+	t.Parallel()
+	tm := newTestModel(t, nil)
+	tm.Type("/reload")
+	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
+	teatest.WaitFor(t, tm.Output(), func(o []byte) bool {
+		return bytes.Contains(o, []byte("Reload not available"))
+	}, teatest.WithDuration(2*time.Second))
+	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
+	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(2*time.Second))
+}
+
+func TestProgram_Reload_InstallsResult(t *testing.T) {
+	t.Parallel()
+	m, tm := newTestModelExposed(t, nil)
+
+	called := 0
+	m.reloadFromDisk = func() (reloadResult, error) {
+		called++
+		newAgent, _ := agent.New(&testutil.FakeModel{ModelName: "after"})
+		return reloadResult{
+			Agent:  newAgent,
+			Memory: memory.Loaded{Sources: []memory.Source{{Scope: "project", Path: "/tmp/AGENTS.md", Bytes: 10}}},
+		}, nil
+	}
+
+	tm.Type("/reload")
+	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
+	teatest.WaitFor(t, tm.Output(), func(o []byte) bool {
+		return bytes.Contains(o, []byte("Reloaded .agents/ from disk"))
+	}, teatest.WithDuration(2*time.Second))
+	if called != 1 {
+		t.Errorf("reloadFromDisk called %d times, want 1", called)
+	}
+
+	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
+	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(2*time.Second))
+}
+
 func TestProgram_MCP_NoServersConfigured(t *testing.T) {
 	t.Parallel()
 	tm := newTestModel(t, nil)
