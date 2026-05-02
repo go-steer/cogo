@@ -32,6 +32,9 @@ linters:
     - unparam        # unused function parameters
     - gocritic       # opinionated extra rules; many useful, low false-positive
 
+    # Compliance.
+    - goheader       # enforces SPDX + copyright header on every .go file
+
     # Security.
     - gosec          # OWASP-style checks (nosec via // #nosec)
 
@@ -82,6 +85,13 @@ linters:
         # behave like normal repo files. Secret material would be
         # re-flagged at the call site.
         - G306
+    goheader:
+      # Enforced on every .go file. Any year (or range) ending in the
+      # current year is accepted, so files added in 2026 say "2026"
+      # and stale ones can be bumped to "2026-2027" on first edit.
+      template: |-
+        Copyright {{ YEAR-RANGE }} The Cogo Authors.
+        SPDX-License-Identifier: Apache-2.0
 
 formatters:
   enable:
