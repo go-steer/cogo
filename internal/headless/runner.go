@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 
 	adkmodel "google.golang.org/adk/model"
 
@@ -22,7 +23,9 @@ import (
 	"github.com/go-steer/cogo/internal/memory"
 	"github.com/go-steer/cogo/internal/models"
 	"github.com/go-steer/cogo/internal/permissions"
+	"github.com/go-steer/cogo/internal/session"
 	"github.com/go-steer/cogo/internal/skills"
+	"github.com/go-steer/cogo/internal/telemetry"
 	"github.com/go-steer/cogo/internal/tools"
 	"github.com/go-steer/cogo/internal/usage"
 )
@@ -116,6 +119,15 @@ func Run(ctx context.Context, m adkmodel.LLM, prompt string, stdout, stderr io.W
 // passing it lets the memory loader anchor the project search at the
 // right root.
 func RunFromConfig(ctx context.Context, cfg *config.Config, agentsDir, prompt string, stdout, stderr io.Writer) (int, error) {
+	startedAt := time.Now()
+
+	// OTEL setup — off by default, configurable via cfg.OTEL.Exporter.
+	otelShutdown, err := telemetry.Setup(ctx, cfg.OTEL.Exporter)
+	if err != nil {
+		fmt.Fprintf(stderr, "cogo: telemetry setup: %v\n", err)
+	}
+	defer func() { _ = otelShutdown(context.Background()) }()
+
 	provider, err := models.Resolve(cfg)
 	if err != nil {
 		return ExitConfigError, err
@@ -179,6 +191,23 @@ func RunFromConfig(ctx context.Context, cfg *config.Config, agentsDir, prompt st
 	code, err := Run(ctx, m, prompt, stdout, stderr, tracker, pricing, opts...)
 	if err == nil && code == ExitOK {
 		writeExitSummary(stderr, tracker, m.Name())
+	}
+	// Persist a one-turn transcript when we have somewhere to write.
+	if agentsDir != "" {
+		tot := tracker.Totals()
+		_, _ = session.Save(agentsDir, session.Transcript{
+			StartedAt: startedAt,
+			Model:     m.Name(),
+			Messages: []session.Message{
+				{Role: "user", Text: prompt},
+			},
+			Usage: session.Usage{
+				Turns:        tot.Turns,
+				InputTokens:  tot.InputTokens,
+				OutputTokens: tot.OutputTokens,
+				CostUSD:      tot.CostUSD,
+			},
+		})
 	}
 	return code, err
 }

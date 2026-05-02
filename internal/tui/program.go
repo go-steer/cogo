@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -16,7 +17,9 @@ import (
 	"github.com/go-steer/cogo/internal/memory"
 	"github.com/go-steer/cogo/internal/models"
 	"github.com/go-steer/cogo/internal/permissions"
+	"github.com/go-steer/cogo/internal/session"
 	"github.com/go-steer/cogo/internal/skills"
+	"github.com/go-steer/cogo/internal/telemetry"
 	"github.com/go-steer/cogo/internal/tools"
 	"github.com/go-steer/cogo/internal/usage"
 )
@@ -37,8 +40,18 @@ const (
 //
 // agentsDir is the resolved .agents/ directory if one was found, or
 // empty when running with built-in defaults; we use it to persist
-// "Always allow" path-scope choices into config.json.
+// "Always allow" path-scope choices into config.json and to write
+// session transcripts under sessions/.
 func Run(ctx context.Context, cfg *config.Config, agentsDir string) (int, error) {
+	startedAt := time.Now()
+
+	// OpenTelemetry — off by default; honors cfg.OTEL.Exporter.
+	otelShutdown, err := telemetry.Setup(ctx, cfg.OTEL.Exporter)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "cogo: telemetry setup: %v\n", err)
+	}
+	defer func() { _ = otelShutdown(context.Background()) }()
+
 	provider, err := models.Resolve(cfg)
 	if err != nil {
 		return ExitConfigError, err
@@ -173,10 +186,60 @@ func Run(ctx context.Context, cfg *config.Config, agentsDir string) (int, error)
 	m.SetProgram(p)
 	prompter.(*tuiPrompter).send = p
 
-	if _, err := p.Run(); err != nil {
+	finalModel, err := p.Run()
+	if err != nil {
 		return ExitRunError, fmt.Errorf("tui: %w", err)
 	}
+
+	// Persist transcript on exit when we have a project root. Failures
+	// here are non-fatal; we report to stderr so they're visible after
+	// the alt-screen is torn down.
+	if fm, ok := finalModel.(*Model); ok && agentsDir != "" {
+		path, err := saveTranscript(agentsDir, startedAt, fm)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "cogo: transcript save: %v\n", err)
+		} else if path != "" {
+			fmt.Fprintf(os.Stderr, "cogo: transcript saved to %s\n", path)
+		}
+	}
 	return ExitOK, nil
+}
+
+// saveTranscript serializes the TUI's chat history + usage totals to
+// .agents/sessions/<timestamp>.json.
+func saveTranscript(agentsDir string, started time.Time, m *Model) (string, error) {
+	msgs := m.history.Snapshot()
+	out := make([]session.Message, 0, len(msgs))
+	for _, msg := range msgs {
+		out = append(out, session.Message{Role: roleString(msg.Role), Text: msg.Text})
+	}
+	tot := session.Usage{}
+	if m.usage != nil {
+		t := m.usage.Totals()
+		tot = session.Usage{Turns: t.Turns, InputTokens: t.InputTokens, OutputTokens: t.OutputTokens, CostUSD: t.CostUSD}
+	}
+	return session.Save(agentsDir, session.Transcript{
+		StartedAt: started,
+		Model:     m.cfg.Model.Name,
+		Messages:  out,
+		Usage:     tot,
+	})
+}
+
+// roleString maps the TUI's Role enum to the human-readable strings
+// the transcript schema uses.
+func roleString(r Role) string {
+	switch r {
+	case RoleUser:
+		return "user"
+	case RoleAssistant:
+		return "assistant"
+	case RoleSystem:
+		return "system"
+	case RoleError:
+		return "error"
+	}
+	return "unknown"
 }
 
 // appendPathScope adds pattern to .agents/config.json's

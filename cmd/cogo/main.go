@@ -17,7 +17,9 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
+	"time"
 
 	"golang.org/x/term"
 
@@ -86,6 +88,10 @@ func run(args []string, stdout, stderr *os.File) int {
 	} else {
 		slog.Debug("no .agents/ found; using built-in defaults")
 	}
+	if debug && agentsDir != "" {
+		closeLog := setupDebugLogFile(agentsDir, stderr)
+		defer closeLog()
+	}
 
 	if prompt != "" {
 		code, err := headless.RunFromConfig(ctx, cfg, agentsDir, prompt, stdout, stderr)
@@ -114,6 +120,36 @@ func setupLogging(debug bool, w *os.File) {
 	}
 	h := slog.NewTextHandler(w, &slog.HandlerOptions{Level: level})
 	slog.SetDefault(slog.New(h))
+}
+
+// setupDebugLogFile installs a JSONL slog handler writing to
+// .agents/logs/<timestamp>.jsonl. Called only when --debug is set
+// AND we have a project .agents/ to write into. Returns a closer
+// the caller should defer to flush the file on exit.
+//
+// Falls back to text-on-stderr (no JSONL file) when agentsDir is empty
+// or the file can't be opened — debug mode still works, just without
+// the structured log.
+func setupDebugLogFile(agentsDir string, stderr *os.File) func() {
+	if agentsDir == "" {
+		return func() {}
+	}
+	logDir := filepath.Join(agentsDir, "logs")
+	if err := os.MkdirAll(logDir, 0o755); err != nil {
+		fmt.Fprintf(stderr, "cogo: debug log dir: %v\n", err)
+		return func() {}
+	}
+	name := time.Now().UTC().Format("2006-01-02T15-04-05") + ".jsonl"
+	path := filepath.Join(logDir, name)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		fmt.Fprintf(stderr, "cogo: debug log open: %v\n", err)
+		return func() {}
+	}
+	h := slog.NewJSONHandler(f, &slog.HandlerOptions{Level: slog.LevelDebug})
+	slog.SetDefault(slog.New(h))
+	fmt.Fprintf(stderr, "cogo: debug log → %s\n", path)
+	return func() { _ = f.Close() }
 }
 
 func printUsage(w *os.File) {
