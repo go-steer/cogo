@@ -489,12 +489,14 @@ func TestProgram_PermissionModalAlwaysCallsHook(t *testing.T) {
 	t.Parallel()
 	m, tm := newTestModelExposed(t, nil)
 
-	// atomic.Pointer so the program goroutine that runs AlwaysAllow
-	// and the test goroutine that asserts on the captured request
-	// synchronize properly under -race.
-	var got atomic.Pointer[permissions.PromptRequest]
+	// Channel so the test waits for AlwaysAllow to actually fire before
+	// asserting. atomic.Pointer wasn't enough on its own: the model's
+	// handleConfirmKey sends the user's decision back through `out`
+	// BEFORE invoking AlwaysAllow, so the test's <-out read could
+	// observe nil if it raced ahead of the callback.
+	hookCalled := make(chan permissions.PromptRequest, 1)
 	m.AlwaysAllow = func(req permissions.PromptRequest) error {
-		got.Store(&req)
+		hookCalled <- req
 		return nil
 	}
 
@@ -518,8 +520,13 @@ func TestProgram_PermissionModalAlwaysCallsHook(t *testing.T) {
 		t.Errorf("decision = %v, want allow-always", d)
 	}
 	// Persistence hook should have fired.
-	if g := got.Load(); g == nil || g.PersistKey != "/var/log" {
-		t.Errorf("AlwaysAllow hook not called with expected req: %+v", g)
+	select {
+	case req := <-hookCalled:
+		if req.PersistKey != "/var/log" {
+			t.Errorf("AlwaysAllow hook called with PersistKey=%q, want /var/log", req.PersistKey)
+		}
+	case <-time.After(2 * time.Second):
+		t.Errorf("AlwaysAllow hook did not fire within 2s")
 	}
 
 	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
