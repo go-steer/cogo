@@ -63,16 +63,16 @@ toc: false
 
 ## Install
 
-{{< tabs items="Homebrew,Docker,go install,Source" >}}
+{{< tabs >}}
 
-  {{< tab >}}
+  {{< tab name="Homebrew" >}}
   ```bash
   brew install go-steer/cogo/cogo
   cogo --version
   ```
   {{< /tab >}}
 
-  {{< tab >}}
+  {{< tab name="Docker" >}}
   ```bash
   docker pull ghcr.io/go-steer/cogo:latest
   docker run --rm -it -v "$PWD:/work" -w /work \
@@ -80,13 +80,13 @@ toc: false
   ```
   {{< /tab >}}
 
-  {{< tab >}}
+  {{< tab name="go install" >}}
   ```bash
   go install github.com/go-steer/cogo/cmd/cogo@latest
   ```
   {{< /tab >}}
 
-  {{< tab >}}
+  {{< tab name="Source" >}}
   ```bash
   git clone https://github.com/go-steer/cogo
   cd cogo
