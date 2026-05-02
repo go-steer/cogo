@@ -1,3 +1,6 @@
+// Copyright 2026 The Cogo Authors.
+// SPDX-License-Identifier: Apache-2.0
+
 // Package skills loads Claude-compatible SKILL.md bundles from
 // .agents/skills/<name>/ and exposes them as an ADK Toolset the agent
 // can invoke.

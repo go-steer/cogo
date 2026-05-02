@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright 2026 The Cogo Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 # Run the unit test suite with -race + atomic coverage.
 #
 # Outputs coverage.out at the repo root for the CI summary step.

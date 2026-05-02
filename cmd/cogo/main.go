@@ -1,3 +1,6 @@
+// Copyright 2026 The Cogo Authors.
+// SPDX-License-Identifier: Apache-2.0
+
 // Command cogo is the entry point for the Cogo agentic CLI.
 //
 // Two modes:

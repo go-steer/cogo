@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright 2026 The Cogo Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 # Run `go vet ./...` from the repo root.
 set -euo pipefail
 . "$(dirname "$0")/common.sh"

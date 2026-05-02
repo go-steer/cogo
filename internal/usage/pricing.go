@@ -1,3 +1,6 @@
+// Copyright 2026 The Cogo Authors.
+// SPDX-License-Identifier: Apache-2.0
+
 // Package usage tracks token + cost accounting for the agent loop.
 //
 // Every model call returns a UsageMetadata block with input and output

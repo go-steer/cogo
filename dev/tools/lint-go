@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright 2026 The Cogo Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 # Run golangci-lint with the project's pinned config.
 #
 # Pass --fix to apply auto-fixable suggestions in place.

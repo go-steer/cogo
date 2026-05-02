@@ -1,3 +1,6 @@
+// Copyright 2026 The Cogo Authors.
+// SPDX-License-Identifier: Apache-2.0
+
 // Package session writes session transcripts to disk on exit.
 //
 // Per REQUIREMENTS FR-11.1, every Cogo run that has a project

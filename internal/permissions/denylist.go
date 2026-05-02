@@ -1,3 +1,6 @@
+// Copyright 2026 The Cogo Authors.
+// SPDX-License-Identifier: Apache-2.0
+
 // Package permissions implements Cogo's permission gate: the central
 // chokepoint that decides whether each tool invocation may proceed.
 //

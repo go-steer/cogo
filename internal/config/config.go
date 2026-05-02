@@ -1,3 +1,6 @@
+// Copyright 2026 The Cogo Authors.
+// SPDX-License-Identifier: Apache-2.0
+
 // Package config defines the on-disk schema for `.agents/config.json` and
 // the rules for discovering, parsing, and merging it with built-in defaults.
 //

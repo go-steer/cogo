@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright 2026 The Cogo Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 # CI delegator: go mod tidy verification via dev/tools/verify-mod-tidy.
 set -euo pipefail
 exec "$(dirname "$0")/../../tools/verify-mod-tidy" "$@"

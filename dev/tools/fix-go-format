@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright 2026 The Cogo Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 # Reformat all Go source: gofmt -s + goimports (with local-prefix grouping).
 set -euo pipefail
 . "$(dirname "$0")/common.sh"

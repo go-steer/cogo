@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright 2026 The Cogo Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 # CI delegator: runs the unit test suite via dev/tools/test-unit.
 set -euo pipefail
 exec "$(dirname "$0")/../../tools/test-unit" "$@"

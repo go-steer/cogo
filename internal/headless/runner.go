@@ -1,3 +1,6 @@
+// Copyright 2026 The Cogo Authors.
+// SPDX-License-Identifier: Apache-2.0
+
 // Package headless implements `cogo -p "prompt"` — a one-shot, no-TUI
 // invocation that streams the assistant's response to stdout and exits.
 //

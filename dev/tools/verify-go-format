@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright 2026 The Cogo Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 # Fail when any Go file isn't gofmt -s + goimports clean.
 #
 # Read-only — never modifies sources. Run dev/tools/fix-go-format to

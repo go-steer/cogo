@@ -1,3 +1,6 @@
+// Copyright 2026 The Cogo Authors.
+// SPDX-License-Identifier: Apache-2.0
+
 // Package agent wraps the Google ADK runner with Cogo-specific defaults
 // (streaming mode, in-memory session service, app name) so callers in
 // cmd/cogo, internal/headless, and internal/tui all hit the same shape.

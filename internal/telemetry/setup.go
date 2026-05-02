@@ -1,3 +1,6 @@
+// Copyright 2026 The Cogo Authors.
+// SPDX-License-Identifier: Apache-2.0
+
 // Package telemetry initializes OpenTelemetry for the agent loop.
 //
 // Per REQUIREMENTS NFR-12 / DESIGN §3.12, telemetry is off by default

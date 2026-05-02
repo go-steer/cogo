@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright 2026 The Cogo Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 # Fail when go.mod / go.sum are not in `go mod tidy` form.
 set -euo pipefail
 . "$(dirname "$0")/common.sh"

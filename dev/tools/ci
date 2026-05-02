@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright 2026 The Cogo Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 # Local CI runner — executes every check the GitHub Actions workflow runs,
 # in fast-fail order. Mirrors dev/ci/presubmits/* so a green run here
 # means a green run there.

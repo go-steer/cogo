@@ -1,3 +1,6 @@
+// Copyright 2026 The Cogo Authors.
+// SPDX-License-Identifier: Apache-2.0
+
 // Package mcp wires user-configured Model Context Protocol servers
 // into Cogo's agent loop.
 //

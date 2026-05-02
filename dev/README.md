@@ -34,6 +34,7 @@ dev/
 │   ├── fix-go-format      # gofmt -s -w + goimports -w (auto-fix)
 │   ├── verify-mod-tidy    # `go mod tidy` clean check
 │   ├── verify-vuln        # govulncheck ./...
+│   ├── add-license-headers # bulk-applier for SPDX + copyright headers
 │   ├── common.sh          # shared bash helpers (ensure_tool, run_step)
 │   └── .golangci.yml      # linter config
 └── ci/
@@ -58,6 +59,21 @@ dev/
 
 That's it — the delegator pattern means the GitHub workflow never has
 to know what the check actually does.
+
+## License headers
+
+Every source file carries a two-line SPDX header at the top:
+
+```
+// Copyright 2026 The Cogo Authors.
+// SPDX-License-Identifier: Apache-2.0
+```
+
+(`#`-prefixed for shell + YAML.) The `goheader` linter inside
+`dev/tools/lint-go` enforces this on every `.go` file — CI fails if a
+new Go source is missing it. For shell and YAML files, run
+`dev/tools/add-license-headers` after creating new ones; the script is
+idempotent and only touches files that don't already carry the header.
 
 ## Pinned tool versions
 

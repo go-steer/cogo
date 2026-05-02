@@ -1,3 +1,6 @@
+// Copyright 2026 The Cogo Authors.
+// SPDX-License-Identifier: Apache-2.0
+
 // Package initcmd implements the `cogo init` subcommand: scaffolding
 // .agents/{config.json, .gitignore, AGENTS.md} for a fresh project.
 //

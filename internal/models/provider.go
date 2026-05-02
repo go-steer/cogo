@@ -1,3 +1,6 @@
+// Copyright 2026 The Cogo Authors.
+// SPDX-License-Identifier: Apache-2.0
+
 // Package models is Cogo's adapter layer between cogo-side configuration
 // and concrete LLM backends. The Provider interface keeps the rest of the
 // codebase free of provider-specific imports so additional backends can be

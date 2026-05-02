@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright 2026 The Cogo Authors.
+# SPDX-License-Identifier: Apache-2.0
+
 # CI delegator: gofmt + goimports verification via dev/tools/verify-go-format.
 set -euo pipefail
 exec "$(dirname "$0")/../../tools/verify-go-format" "$@"

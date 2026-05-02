@@ -1,3 +1,6 @@
+// Copyright 2026 The Cogo Authors.
+// SPDX-License-Identifier: Apache-2.0
+
 // Package gemini implements models.Provider for the Gemini family,
 // covering both the public Gemini API (API-key auth) and Vertex AI
 // (Application Default Credentials + GCP project).
