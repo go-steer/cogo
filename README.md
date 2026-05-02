@@ -42,7 +42,18 @@ docker run --rm -it -v "$PWD:/work" -w /work ghcr.io/go-steer/cogo:latest -p "he
 go install github.com/go-steer/cogo/cmd/cogo@latest
 ```
 
-**Pre-built binaries** for Linux + macOS (amd64 + arm64) are attached to every [GitHub release](https://github.com/go-steer/cogo/releases). Verify the version with `cogo --version`.
+**Pre-built binaries** — every [GitHub release](https://github.com/go-steer/cogo/releases/latest) attaches a tarball per platform:
+
+| Platform              | Asset                                           |
+|-----------------------|-------------------------------------------------|
+| Linux amd64           | `cogo_<version>_linux_amd64.tar.gz`             |
+| Linux arm64           | `cogo_<version>_linux_arm64.tar.gz`             |
+| macOS Intel           | `cogo_<version>_darwin_amd64.tar.gz`            |
+| macOS Apple Silicon   | `cogo_<version>_darwin_arm64.tar.gz`            |
+
+A `checksums.txt` (SHA256) ships in every release. The [install docs](https://go-steer.github.io/cogo/docs/getting-started/install/#pre-built-binaries) include an auto-detect installer one-liner and a verification snippet.
+
+Verify after install: `cogo --version`.
 
 ## Quick start
 

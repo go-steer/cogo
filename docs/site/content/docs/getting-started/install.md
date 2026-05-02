@@ -37,12 +37,55 @@ Drops the binary into `$GOBIN` (or `$(go env GOPATH)/bin`). Make sure that's on 
 
 ## Pre-built binaries
 
-Each [GitHub release](https://github.com/go-steer/cogo/releases) attaches tarballs for:
+Every [GitHub release](https://github.com/go-steer/cogo/releases/latest) attaches platform-specific tarballs. Each tarball contains the `cogo` binary plus `LICENSE`, `README.md`, and the `docs/` directory. Pick the one for your OS + architecture:
 
-- `linux-amd64`, `linux-arm64`
-- `darwin-amd64`, `darwin-arm64`
+| Platform        | Asset                                       | Direct link |
+|-----------------|---------------------------------------------|-------------|
+| Linux amd64     | `cogo_<version>_linux_amd64.tar.gz`         | [Latest releases →](https://github.com/go-steer/cogo/releases/latest) |
+| Linux arm64     | `cogo_<version>_linux_arm64.tar.gz`         | [Latest releases →](https://github.com/go-steer/cogo/releases/latest) |
+| macOS Intel     | `cogo_<version>_darwin_amd64.tar.gz`        | [Latest releases →](https://github.com/go-steer/cogo/releases/latest) |
+| macOS Apple Silicon | `cogo_<version>_darwin_arm64.tar.gz`    | [Latest releases →](https://github.com/go-steer/cogo/releases/latest) |
 
-Download, extract, and drop `cogo` somewhere on your `$PATH`. Verify the install:
+Each release also includes a `checksums.txt` with SHA256s for every asset.
+
+### Auto-detect installer
+
+A one-liner that picks the right asset for the current host:
+
+```bash
+VERSION=$(curl -fsSL https://api.github.com/repos/go-steer/cogo/releases/latest \
+  | grep -o '"tag_name": *"v[^"]*"' | head -1 | sed 's/.*"v\([^"]*\)".*/\1/')
+OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')
+ARCHIVE="cogo_${VERSION}_${OS}_${ARCH}.tar.gz"
+URL="https://github.com/go-steer/cogo/releases/download/v${VERSION}/${ARCHIVE}"
+
+curl -fsSL -o "$ARCHIVE" "$URL"
+tar -xzf "$ARCHIVE"
+sudo install cogo /usr/local/bin/cogo
+cogo --version
+```
+
+### Verify with checksums
+
+```bash
+# After downloading the tarball:
+curl -fsSL -O "https://github.com/go-steer/cogo/releases/download/v${VERSION}/checksums.txt"
+sha256sum --check --ignore-missing checksums.txt
+# cogo_<version>_<os>_<arch>.tar.gz: OK
+```
+
+### Manual install
+
+If you'd rather click through the UI:
+
+1. Open the [latest release](https://github.com/go-steer/cogo/releases/latest).
+2. Under **Assets**, click the tarball for your platform.
+3. Extract: `tar -xzf cogo_<version>_<os>_<arch>.tar.gz`.
+4. Move the binary onto your `$PATH`: `sudo install cogo /usr/local/bin/cogo` (or any directory on `$PATH`).
+5. Verify: `cogo --version`.
+
+### Verify the install
 
 ```bash
 cogo --version
