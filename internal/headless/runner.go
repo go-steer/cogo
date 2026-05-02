@@ -9,12 +9,15 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 
 	adkmodel "google.golang.org/adk/model"
 
 	"github.com/go-steer/cogo/internal/agent"
 	"github.com/go-steer/cogo/internal/config"
 	"github.com/go-steer/cogo/internal/models"
+	"github.com/go-steer/cogo/internal/permissions"
+	"github.com/go-steer/cogo/internal/tools"
 )
 
 // Exit codes — kept distinct so CI can disambiguate failure modes.
@@ -25,17 +28,20 @@ const (
 )
 
 // Run executes prompt against m and streams the assistant's text to
-// stdout as partial events arrive. Tool-call summaries (none in Slice 1)
-// would be written to stderr. Returns an exit code suitable for os.Exit.
+// stdout as partial events arrive. Tool-call summaries are written to
+// stderr as one line per call. Returns an exit code suitable for os.Exit.
+//
+// agentOpts lets the caller pass extra agent.Options (notably WithTools);
+// when nil, the agent runs with no tools — useful for tests with FakeModel.
 //
 // A trailing newline is always added to stdout when at least one chunk
 // was written, so shell pipelines see a clean terminator.
-func Run(ctx context.Context, m adkmodel.LLM, prompt string, stdout, stderr io.Writer) (int, error) {
+func Run(ctx context.Context, m adkmodel.LLM, prompt string, stdout, stderr io.Writer, agentOpts ...agent.Option) (int, error) {
 	if prompt == "" {
 		return ExitConfigError, fmt.Errorf("headless: prompt is required")
 	}
 
-	a, err := agent.New(m)
+	a, err := agent.New(m, agentOpts...)
 	if err != nil {
 		return ExitAgentError, err
 	}
@@ -51,20 +57,21 @@ func Run(ctx context.Context, m adkmodel.LLM, prompt string, stdout, stderr io.W
 		if event.Content == nil {
 			continue
 		}
-		// Partial events stream incremental text; we forward those directly.
-		// The final TurnComplete event repeats the full text and is skipped
-		// to avoid duplicate output.
-		if !event.Partial {
-			continue
-		}
+		// Tool-call summaries → stderr (one line per call/result).
+		// Partial assistant text → stdout (streamed incrementally).
+		// Final TurnComplete event repeats the full text; skipped.
 		for _, p := range event.Content.Parts {
-			if p.Text == "" {
-				continue
+			switch {
+			case p.FunctionCall != nil:
+				fmt.Fprintf(stderr, "→ %s\n", p.FunctionCall.Name)
+			case p.FunctionResponse != nil:
+				fmt.Fprintf(stderr, "← %s\n", p.FunctionResponse.Name)
+			case p.Text != "" && event.Partial:
+				if _, err := io.WriteString(stdout, p.Text); err != nil {
+					return ExitAgentError, fmt.Errorf("headless: write stdout: %w", err)
+				}
+				wroteAnything = true
 			}
-			if _, err := io.WriteString(stdout, p.Text); err != nil {
-				return ExitAgentError, fmt.Errorf("headless: write stdout: %w", err)
-			}
-			wroteAnything = true
 		}
 	}
 	if wroteAnything {
@@ -76,8 +83,12 @@ func Run(ctx context.Context, m adkmodel.LLM, prompt string, stdout, stderr io.W
 }
 
 // RunFromConfig is the entry point used by cmd/cogo: it builds a Provider
-// from cfg, asks for the configured model ID, and dispatches to Run.
-// Surfaces config-vs-runtime errors with distinct exit codes.
+// from cfg, asks for the configured model ID, assembles the built-in
+// tools with a permission gate, and dispatches to Run.
+//
+// Headless invocations have no TTY for prompts, so the gate is built
+// without a Prompter: anything that would prompt fails fast with a
+// clear message asking the user to add an explicit allowlist entry.
 func RunFromConfig(ctx context.Context, cfg *config.Config, prompt string, stdout, stderr io.Writer) (int, error) {
 	provider, err := models.Resolve(cfg)
 	if err != nil {
@@ -87,5 +98,19 @@ func RunFromConfig(ctx context.Context, cfg *config.Config, prompt string, stdou
 	if err != nil {
 		return ExitConfigError, err
 	}
-	return Run(ctx, m, prompt, stdout, stderr)
+	cwd, _ := os.Getwd()
+	userHome, _ := os.UserHomeDir()
+	cogoHome := ""
+	if userHome != "" {
+		cogoHome = userHome + "/.cogo"
+	}
+	gate, err := permissions.FromConfig(cfg, cwd, cogoHome, nil /*no prompter*/)
+	if err != nil {
+		return ExitConfigError, err
+	}
+	registry, err := tools.Build(cfg, gate)
+	if err != nil {
+		return ExitConfigError, err
+	}
+	return Run(ctx, m, prompt, stdout, stderr, agent.WithTools(registry.Tools))
 }

@@ -94,7 +94,7 @@ func run(args []string, stdout, stderr *os.File) int {
 		fmt.Fprintln(stderr, "cogo: interactive TUI requires a terminal. Use -p \"your prompt\" for headless mode.")
 		return headless.ExitConfigError
 	}
-	code, err := tui.Run(ctx, cfg)
+	code, err := tui.Run(ctx, cfg, agentsDir)
 	if err != nil {
 		fmt.Fprintf(stderr, "cogo: %v\n", err)
 	}

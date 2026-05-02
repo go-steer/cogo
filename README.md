@@ -2,7 +2,7 @@
 
 A terminal-native agentic CLI for Go developers — think *Claude Code* but Go-native, built on the Google ADK and Gemini 3.x. Configurable per project via a `.agents/` directory, with first-class support for MCP servers and Claude-compatible skills.
 
-> **Status:** V1 in active development. Slices 1–2 are up: `cogo -p "..."` runs an end-to-end one-shot prompt, and `cogo` (no args, on a TTY) opens an interactive Bubble Tea chat with streaming output and markdown rendering. Tools, MCP, skills, permissions, project memory, and the rest of the slash-command set are landing in subsequent slices. See [`docs/REQUIREMENTS.md`](./docs/REQUIREMENTS.md) for the full V1 scope and [`docs/SLICES.md`](./docs/SLICES.md) for the build order.
+> **Status:** V1 in active development. Slices 1–3 are up: `cogo -p "..."` runs an end-to-end one-shot prompt; `cogo` (no args, on a TTY) opens an interactive Bubble Tea chat with streaming output and markdown rendering; the agent has built-in tools (file I/O, bash, todo) gated by a permission system with a non-overridable bash denylist and per-project path scoping. MCP, skills, project memory, and the rest of the slash-command set land in subsequent slices. See [`docs/REQUIREMENTS.md`](./docs/REQUIREMENTS.md) for the full V1 scope and [`docs/SLICES.md`](./docs/SLICES.md) for the build order.
 
 ## Why
 
@@ -37,17 +37,19 @@ go run ./cmd/cogo -p "What is 2+2?"
 
 See [`.env.example`](./.env.example) for a copy-pasteable template.
 
-## What works today (Slices 1–2)
+## What works today (Slices 1–3)
 
 - `cogo -p "<prompt>"` runs a single turn and streams the assistant's response to stdout (Slice 1).
 - `cogo` (no args, on a TTY) opens an interactive Bubble Tea chat: streaming text in real time, markdown rendering on completion, multi-line input (Shift+Enter for newline), and `/help` / `/clear` / `/quit` slash commands (Slice 2).
+- Built-in tools the agent can call: `read_file`, `write_file`, `edit_file`, `list_dir`, `bash`, `todo`. Tool output is truncated when it exceeds the per-tool caps in `tool_output` config (Slice 3).
+- Permission system with `ask` / `allow` / `yolo` modes: an in-TUI modal prompts before mutating ops with **y** (allow once) / **s** (allow this session) / **a** (always allow, persisted) / **n** or **esc** (deny). A non-overridable bash denylist refuses things like `rm -rf /`. Path scoping confines file tools to the project root + `~/.cogo/` + any explicit `path_scope.allow` entries (Slice 3).
 - Ctrl+C cancels the current turn while streaming; a second press while idle exits.
 - Non-TTY invocation (piped stdin, CI) prints a hint pointing at `-p` and exits non-zero rather than hanging.
 - Both auth paths work (public Gemini API + Vertex AI).
 - `.agents/config.json` is auto-discovered (walks up from the working directory like `.git`); falls back to built-in defaults when absent.
 - Provider auto-detection from environment variables when `model.provider` is not set in config.
 
-Tools, MCP, skills, full slash-command set, project memory, the permission system, OTEL, and transcript persistence are not yet wired — those land in Slices 3–5.
+MCP, skills, full slash-command set, project memory, OTEL, cost surfacing, and transcript persistence are not yet wired — those land in Slices 4–5.
 
 ## Tests
 

@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-steer/cogo/internal/agent"
 	"github.com/go-steer/cogo/internal/config"
+	"github.com/go-steer/cogo/internal/permissions"
 	"github.com/go-steer/cogo/internal/testutil"
 )
 
@@ -29,6 +30,23 @@ func newTestModel(t *testing.T, script []testutil.ScriptedResponse) *teatest.Tes
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(80, 24))
 	m.SetProgram(tm.GetProgram())
 	return tm
+}
+
+// newTestModelExposed returns the model alongside the test program so
+// individual tests can poke its public fields (e.g. AlwaysAllow) and
+// inject permission requests directly without needing a real tool.
+func newTestModelExposed(t *testing.T, script []testutil.ScriptedResponse) (*Model, *teatest.TestModel) {
+	t.Helper()
+	cfg := config.DefaultConfig()
+	fake := &testutil.FakeModel{ModelName: "fake", Script: script}
+	a, err := agent.New(fake)
+	if err != nil {
+		t.Fatalf("agent.New: %v", err)
+	}
+	m := NewModel(cfg, a, "dark")
+	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(80, 24))
+	m.SetProgram(tm.GetProgram())
+	return m, tm
 }
 
 func TestProgram_StreamsThenRendersAndQuits(t *testing.T) {
@@ -77,6 +95,102 @@ func TestProgram_UnknownSlashShowsHint(t *testing.T) {
 	teatest.WaitFor(t, tm.Output(), func(out []byte) bool {
 		return bytes.Contains(out, []byte("Unknown command"))
 	}, teatest.WithDuration(2*time.Second))
+
+	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
+	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(2*time.Second))
+}
+
+func TestProgram_PermissionModalApprovesAndDenies(t *testing.T) {
+	t.Parallel()
+	_, tm := newTestModelExposed(t, nil)
+
+	// Inject a permission request as if a tool handler had asked.
+	out := make(chan permissions.Decision, 1)
+	tm.Send(confirmReqMsg{
+		Req: permissions.PromptRequest{
+			Kind:        permissions.PromptKindBash,
+			ToolName:    "bash",
+			Detail:      "git push origin main",
+			PersistTool: "bash",
+			PersistKey:  "git push origin main",
+		},
+		Out: out,
+	})
+
+	// Modal should appear in the rendered output.
+	teatest.WaitFor(t, tm.Output(), func(o []byte) bool {
+		return bytes.Contains(o, []byte("git push origin main")) &&
+			bytes.Contains(o, []byte("[y] allow once"))
+	}, teatest.WithDuration(2*time.Second))
+
+	// Approve once.
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	if got := <-out; got != permissions.DecisionAllowOnce {
+		t.Errorf("decision = %v, want allow-once", got)
+	}
+
+	// Echo line should land in the chat history.
+	teatest.WaitFor(t, tm.Output(), func(o []byte) bool {
+		return bytes.Contains(o, []byte("Permission allow-once: bash"))
+	}, teatest.WithDuration(2*time.Second))
+
+	// Now deny a second request.
+	out2 := make(chan permissions.Decision, 1)
+	tm.Send(confirmReqMsg{
+		Req: permissions.PromptRequest{
+			Kind:     permissions.PromptKindBash,
+			ToolName: "bash",
+			Detail:   "rm important.txt",
+		},
+		Out: out2,
+	})
+	teatest.WaitFor(t, tm.Output(), func(o []byte) bool {
+		return bytes.Contains(o, []byte("rm important.txt"))
+	}, teatest.WithDuration(2*time.Second))
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
+	if got := <-out2; got != permissions.DecisionDeny {
+		t.Errorf("decision = %v, want deny", got)
+	}
+
+	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
+	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(2*time.Second))
+}
+
+func TestProgram_PermissionModalAlwaysCallsHook(t *testing.T) {
+	t.Parallel()
+	m, tm := newTestModelExposed(t, nil)
+
+	var got *permissions.PromptRequest
+	m.AlwaysAllow = func(req permissions.PromptRequest) error {
+		got = &req
+		return nil
+	}
+
+	out := make(chan permissions.Decision, 1)
+	tm.Send(confirmReqMsg{
+		Req: permissions.PromptRequest{
+			Kind:        permissions.PromptKindPathScope,
+			ToolName:    "read_file",
+			Detail:      "read /var/log/x.log (out of scope)",
+			PersistTool: "path_scope",
+			PersistKey:  "/var/log",
+		},
+		Out: out,
+	})
+	teatest.WaitFor(t, tm.Output(), func(o []byte) bool {
+		return bytes.Contains(o, []byte("/var/log/x.log"))
+	}, teatest.WithDuration(2*time.Second))
+
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+	if d := <-out; d != permissions.DecisionAllowAlways {
+		t.Errorf("decision = %v, want allow-always", d)
+	}
+	// Persistence hook should have fired.
+	if got == nil || got.PersistKey != "/var/log" {
+		t.Errorf("AlwaysAllow hook not called with expected req: %+v", got)
+	}
 
 	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
 	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})

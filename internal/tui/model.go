@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-steer/cogo/internal/agent"
 	"github.com/go-steer/cogo/internal/config"
+	"github.com/go-steer/cogo/internal/permissions"
 )
 
 // State tracks the agent's current activity for input gating and View rendering.
@@ -55,8 +56,19 @@ type Model struct {
 	// Slash-command state.
 	confirmingClear bool
 
+	// Pending permission request from the gate. Non-nil while the
+	// permission modal is up; the user's keypress writes back to
+	// pendingConfirm.Out and clears this field.
+	pendingConfirm *confirmReqMsg
+
 	// True when the user just hit Ctrl+C while idle once. Second press exits.
 	pendingExit bool
+
+	// AlwaysAllow is invoked when the user picks "always allow" in the
+	// permission modal. The host (TUI launcher) plugs in a function
+	// that persists the pattern to .agents/config.json. May be nil in
+	// tests.
+	AlwaysAllow func(req permissions.PromptRequest) error
 }
 
 // NewModel constructs a fresh chat session bound to a configured agent.

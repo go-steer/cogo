@@ -13,6 +13,13 @@ type KeyMap struct {
 	ScrollDown key.Binding
 	LineUp     key.Binding // Up arrow — scrolls viewport when input empty
 	LineDown   key.Binding // Down arrow — scrolls viewport when input empty
+
+	// Permission modal: y allow once, n deny, s allow for the session,
+	// a allow always (persisted).
+	ConfirmAllowOnce    key.Binding
+	ConfirmDeny         key.Binding
+	ConfirmAllowSession key.Binding
+	ConfirmAllowAlways  key.Binding
 }
 
 // DefaultKeyMap returns Cogo's V1 bindings.
@@ -49,6 +56,22 @@ func DefaultKeyMap() KeyMap {
 		LineDown: key.NewBinding(
 			key.WithKeys("down"),
 			key.WithHelp("↓", "scroll down (when input empty)"),
+		),
+		ConfirmAllowOnce: key.NewBinding(
+			key.WithKeys("y"),
+			key.WithHelp("y", "allow once"),
+		),
+		ConfirmDeny: key.NewBinding(
+			key.WithKeys("n", "esc"),
+			key.WithHelp("n/esc", "deny"),
+		),
+		ConfirmAllowSession: key.NewBinding(
+			key.WithKeys("s"),
+			key.WithHelp("s", "allow for this session"),
+		),
+		ConfirmAllowAlways: key.NewBinding(
+			key.WithKeys("a"),
+			key.WithHelp("a", "always allow (persist)"),
 		),
 	}
 }

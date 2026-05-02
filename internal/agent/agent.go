@@ -19,6 +19,7 @@ import (
 	adkmodel "google.golang.org/adk/model"
 	"google.golang.org/adk/runner"
 	"google.golang.org/adk/session"
+	"google.golang.org/adk/tool"
 )
 
 // AppName tags this process in the ADK runner. Telemetry and session
@@ -54,6 +55,7 @@ type options struct {
 	streaming   adkagent.StreamingMode
 	userID      string
 	sessionID   string
+	tools       []tool.Tool
 }
 
 func defaultOptions() options {
@@ -85,6 +87,12 @@ func WithSession(userID, sessionID string) Option {
 	return func(o *options) { o.userID = userID; o.sessionID = sessionID }
 }
 
+// WithTools registers a set of tools the agent may call. Order is
+// preserved but immaterial; ADK keys tools by Name.
+func WithTools(ts []tool.Tool) Option {
+	return func(o *options) { o.tools = append(o.tools, ts...) }
+}
+
 // New constructs an Agent backed by model. Returns a clear error if the
 // underlying ADK constructors reject the configuration.
 func New(model adkmodel.LLM, opts ...Option) (*Agent, error) {
@@ -101,6 +109,7 @@ func New(model adkmodel.LLM, opts ...Option) (*Agent, error) {
 		Model:       model,
 		Description: o.description,
 		Instruction: o.instruction,
+		Tools:       o.tools,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("agent: build llmagent: %w", err)

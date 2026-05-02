@@ -8,6 +8,8 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/go-steer/cogo/internal/permissions"
 )
 
 // Update is Cogo's central message dispatch.
@@ -16,7 +18,21 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		return m.handleResize(msg)
 	case tea.KeyMsg:
+		// Permission modal preempts every other key handler when up.
+		if m.pendingConfirm != nil {
+			return m.handleConfirmKey(msg)
+		}
 		return m.handleKey(msg)
+	case confirmReqMsg:
+		// Show modal; remember the request so handleConfirmKey can
+		// reply to the same channel. If a request is already in flight
+		// we deny the new one immediately to avoid stacking.
+		if m.pendingConfirm != nil {
+			msg.Out <- permissions.DecisionDeny
+			return m, nil
+		}
+		m.pendingConfirm = &msg
+		return m, nil
 	case streamChunkMsg:
 		return m.handleStreamChunk(msg)
 	case turnDoneMsg:
@@ -38,6 +54,47 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	m.textarea, cmd = m.textarea.Update(msg)
 	return m, cmd
+}
+
+// handleConfirmKey resolves the pending permission request based on the
+// user's keypress. Anything other than the four configured keys is
+// ignored so accidental typing doesn't auto-deny.
+func (m *Model) handleConfirmKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.pendingConfirm == nil {
+		return m, nil
+	}
+	var d permissions.Decision
+	switch {
+	case key.Matches(msg, m.keys.ConfirmAllowOnce):
+		d = permissions.DecisionAllowOnce
+	case key.Matches(msg, m.keys.ConfirmAllowSession):
+		d = permissions.DecisionAllowSession
+	case key.Matches(msg, m.keys.ConfirmAllowAlways):
+		d = permissions.DecisionAllowAlways
+	case key.Matches(msg, m.keys.ConfirmDeny):
+		d = permissions.DecisionDeny
+	default:
+		return m, nil
+	}
+	req := m.pendingConfirm.Req
+	m.pendingConfirm.Out <- d
+	m.pendingConfirm = nil
+
+	// Echo the user's choice into the chat so there's a paper trail.
+	m.history.Append(Message{Role: RoleSystem, Text: confirmEcho(req, d)})
+
+	// "Always allow" persists via the host-supplied callback.
+	if d == permissions.DecisionAllowAlways && m.AlwaysAllow != nil {
+		if err := m.AlwaysAllow(req); err != nil {
+			m.history.Append(Message{Role: RoleError, Text: "Couldn't persist allowlist entry: " + err.Error()})
+		}
+	}
+	m.refreshViewport()
+	return m, nil
+}
+
+func confirmEcho(req permissions.PromptRequest, d permissions.Decision) string {
+	return "Permission " + d.String() + ": " + req.ToolName + " — " + req.Detail
 }
 
 func (m *Model) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {

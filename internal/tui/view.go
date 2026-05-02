@@ -11,7 +11,8 @@ import (
 //
 //	Header
 //	Viewport (scrollable history)
-//	Input area (textarea inside a rounded border)
+//	Input area (textarea inside a rounded border) — replaced by the
+//	  permission modal when a request is pending
 //	Footer (status hint or spinner)
 func (m *Model) View() string {
 	if m.width == 0 || m.height == 0 {
@@ -21,10 +22,34 @@ func (m *Model) View() string {
 
 	header := m.renderHeader()
 	body := m.viewport.View()
-	input := m.renderInput()
+	var input string
+	if m.pendingConfirm != nil {
+		input = m.renderConfirmModal()
+	} else {
+		input = m.renderInput()
+	}
 	footer := m.renderFooter()
 
 	return lipgloss.JoinVertical(lipgloss.Left, header, body, input, footer)
+}
+
+// renderConfirmModal draws the permission request modal in place of
+// the input area. Kept simple in Slice 3: a bordered box with the
+// request detail and the four-key prompt.
+func (m *Model) renderConfirmModal() string {
+	req := m.pendingConfirm.Req
+	kindLabel := map[int]string{
+		0: "Bash command",
+		1: "File write",
+		2: "Path scope",
+		3: "Tool",
+	}[int(req.Kind)]
+	if kindLabel == "" {
+		kindLabel = "Tool"
+	}
+	body := m.styles.Confirm.Render(kindLabel+": "+req.Detail) + "\n" +
+		m.styles.Footer.Render("[y] allow once   [s] allow session   [a] always allow   [n/esc] deny")
+	return m.styles.InputBorder.Render(body)
 }
 
 func (m *Model) renderHeader() string {
@@ -47,6 +72,8 @@ func (m *Model) renderInput() string {
 
 func (m *Model) renderFooter() string {
 	switch {
+	case m.pendingConfirm != nil:
+		return m.styles.Footer.Render("Permission required — choose one of the keys above")
 	case m.state == StateStreaming:
 		return m.styles.Footer.Render(m.spinner.View() + " Thinking… (Ctrl+C to cancel)")
 	case m.confirmingClear:

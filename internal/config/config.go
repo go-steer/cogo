@@ -23,10 +23,19 @@ type Config struct {
 	Version     int               `json:"version"`
 	Model       ModelConfig       `json:"model"`
 	Permissions PermissionsConfig `json:"permissions,omitempty"`
+	PathScope   PathScopeConfig   `json:"path_scope,omitempty"`
 	Agent       AgentConfig       `json:"agent,omitempty"`
 	ToolOutput  ToolOutputConfig  `json:"tool_output,omitempty"`
 	OTEL        OTELConfig        `json:"otel,omitempty"`
 	UI          UIConfig          `json:"ui,omitempty"`
+}
+
+// PathScopeConfig holds extra paths that file tools may read/write
+// outside the default project + ~/.cogo/ scope. Patterns may be exact
+// paths or directory globs (terminating "/...") and are typically
+// appended via the "Always allow this path/tree" prompt path.
+type PathScopeConfig struct {
+	Allow []string `json:"allow,omitempty"`
 }
 
 // ModelConfig selects the LLM provider and model.
