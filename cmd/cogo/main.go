@@ -1,8 +1,13 @@
 // Command cogo is the entry point for the Cogo agentic CLI.
 //
-// Slice 1 supports a single mode: `cogo -p "prompt"` runs one agent turn
-// and streams the response to stdout. Without -p, prints help. The
-// interactive TUI lands in Slice 2.
+// Two modes:
+//   - Headless (`cogo -p "prompt"`): run one agent turn, stream the
+//     reply to stdout, exit.
+//   - Interactive TUI (`cogo` on a TTY): launch the Bubble Tea chat.
+//
+// When invoked with no -p and no TTY (piped input or CI), prints a hint
+// pointing at -p and exits non-zero so callers don't hang waiting for
+// a TUI that can't run.
 package main
 
 import (
@@ -14,8 +19,11 @@ import (
 	"os/signal"
 	"syscall"
 
+	"golang.org/x/term"
+
 	"github.com/go-steer/cogo/internal/config"
 	"github.com/go-steer/cogo/internal/headless"
+	"github.com/go-steer/cogo/internal/tui"
 
 	// Register the Gemini provider with models.Resolve.
 	_ "github.com/go-steer/cogo/internal/models/gemini"
@@ -54,14 +62,6 @@ func run(args []string, stdout, stderr *os.File) int {
 
 	setupLogging(debug, stderr)
 
-	if prompt == "" {
-		printUsage(stdout)
-		fmt.Fprintln(stdout)
-		fmt.Fprintln(stdout, "Interactive TUI mode is coming in a later slice. For now, use:")
-		fmt.Fprintln(stdout, "    cogo -p \"your prompt\"")
-		return headless.ExitOK
-	}
-
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
@@ -81,7 +81,20 @@ func run(args []string, stdout, stderr *os.File) int {
 		slog.Debug("no .agents/ found; using built-in defaults")
 	}
 
-	code, err := headless.RunFromConfig(ctx, cfg, prompt, stdout, stderr)
+	if prompt != "" {
+		code, err := headless.RunFromConfig(ctx, cfg, prompt, stdout, stderr)
+		if err != nil {
+			fmt.Fprintf(stderr, "cogo: %v\n", err)
+		}
+		return code
+	}
+
+	// No -p supplied. Launch interactive TUI when attached to a terminal.
+	if !term.IsTerminal(int(os.Stdin.Fd())) || !term.IsTerminal(int(os.Stdout.Fd())) {
+		fmt.Fprintln(stderr, "cogo: interactive TUI requires a terminal. Use -p \"your prompt\" for headless mode.")
+		return headless.ExitConfigError
+	}
+	code, err := tui.Run(ctx, cfg)
 	if err != nil {
 		fmt.Fprintf(stderr, "cogo: %v\n", err)
 	}
@@ -101,8 +114,9 @@ func printUsage(w *os.File) {
 	fmt.Fprintln(w, `Cogo — a terminal-native agentic CLI for Go developers.
 
 Usage:
-  cogo [flags]
-  cogo -p "your prompt"
+  cogo                 Open the interactive TUI (requires a terminal).
+  cogo -p "<prompt>"   Run a single prompt non-interactively and exit.
+  cogo -h              Show this help.
 
 Flags:
   -p, -prompt <text>   Run a single prompt non-interactively and stream the
@@ -115,5 +129,5 @@ Authentication:
   GOOGLE_GENAI_USE_VERTEXAI=true with GOOGLE_CLOUD_PROJECT (and Application
   Default Credentials) for Vertex AI.
 
-See docs/REQUIREMENTS.md and docs/DESIGN.md for the full spec.`)
+See docs/REQUIREMENTS.md, docs/DESIGN.md, and docs/SLICES.md for the spec.`)
 }

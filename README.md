@@ -2,7 +2,7 @@
 
 A terminal-native agentic CLI for Go developers — think *Claude Code* but Go-native, built on the Google ADK and Gemini 3.x. Configurable per project via a `.agents/` directory, with first-class support for MCP servers and Claude-compatible skills.
 
-> **Status:** V1 in active development. The walking skeleton (Slice 1) is up — `cogo -p "..."` works end-to-end. Interactive TUI, tools, skills, MCP, permissions, slash commands, and project memory are landing in subsequent slices. See [`docs/REQUIREMENTS.md`](./docs/REQUIREMENTS.md) for the full V1 scope.
+> **Status:** V1 in active development. Slices 1–2 are up: `cogo -p "..."` runs an end-to-end one-shot prompt, and `cogo` (no args, on a TTY) opens an interactive Bubble Tea chat with streaming output and markdown rendering. Tools, MCP, skills, permissions, project memory, and the rest of the slash-command set are landing in subsequent slices. See [`docs/REQUIREMENTS.md`](./docs/REQUIREMENTS.md) for the full V1 scope and [`docs/SLICES.md`](./docs/SLICES.md) for the build order.
 
 ## Why
 
@@ -37,14 +37,17 @@ go run ./cmd/cogo -p "What is 2+2?"
 
 See [`.env.example`](./.env.example) for a copy-pasteable template.
 
-## What works today (Slice 1)
+## What works today (Slices 1–2)
 
-- `cogo -p "<prompt>"` runs a single turn and streams the assistant's response to stdout.
+- `cogo -p "<prompt>"` runs a single turn and streams the assistant's response to stdout (Slice 1).
+- `cogo` (no args, on a TTY) opens an interactive Bubble Tea chat: streaming text in real time, markdown rendering on completion, multi-line input (Shift+Enter for newline), and `/help` / `/clear` / `/quit` slash commands (Slice 2).
+- Ctrl+C cancels the current turn while streaming; a second press while idle exits.
+- Non-TTY invocation (piped stdin, CI) prints a hint pointing at `-p` and exits non-zero rather than hanging.
 - Both auth paths work (public Gemini API + Vertex AI).
 - `.agents/config.json` is auto-discovered (walks up from the working directory like `.git`); falls back to built-in defaults when absent.
 - Provider auto-detection from environment variables when `model.provider` is not set in config.
 
-Interactive TUI, tools, MCP, skills, slash commands, project memory, and the permission system are not yet wired — those land in Slices 2–5.
+Tools, MCP, skills, full slash-command set, project memory, the permission system, OTEL, and transcript persistence are not yet wired — those land in Slices 3–5.
 
 ## Tests
 
