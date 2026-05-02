@@ -2,7 +2,10 @@
 
 A terminal-native agentic CLI for Go developers — like Claude Code, but built in Go on the [Google ADK](https://github.com/google/adk-go) and Gemini 3.x. One static binary, no Python runtime, project-scoped configuration, first-class support for [MCP](https://modelcontextprotocol.io) servers and Claude-compatible skills.
 
+**📚 Full documentation: [go-steer.github.io/cogo](https://go-steer.github.io/cogo/)**
+
 [![CI](https://github.com/go-steer/cogo/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/go-steer/cogo/actions/workflows/ci.yml)
+[![Docs](https://github.com/go-steer/cogo/actions/workflows/docs.yml/badge.svg?branch=main)](https://go-steer.github.io/cogo/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
 [![Go Reference](https://pkg.go.dev/badge/github.com/go-steer/cogo.svg)](https://pkg.go.dev/github.com/go-steer/cogo)
 
