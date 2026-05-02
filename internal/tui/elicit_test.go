@@ -69,11 +69,11 @@ func TestNewElicitState_FormModeAllPrimitives(t *testing.T) {
 			RequestedSchema: schemaJSON(t, map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"name":   map[string]any{"type": "string", "description": "Your name"},
-					"age":    map[string]any{"type": "integer"},
-					"score":  map[string]any{"type": "number"},
-					"agree":  map[string]any{"type": "boolean"},
-					"color":  map[string]any{"type": "string", "enum": []any{"red", "green", "blue"}},
+					"name":  map[string]any{"type": "string", "description": "Your name"},
+					"age":   map[string]any{"type": "integer"},
+					"score": map[string]any{"type": "number"},
+					"agree": map[string]any{"type": "boolean"},
+					"color": map[string]any{"type": "string", "enum": []any{"red", "green", "blue"}},
 				},
 				"required": []any{"name"},
 			}),

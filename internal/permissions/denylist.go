@@ -2,14 +2,14 @@
 // chokepoint that decides whether each tool invocation may proceed.
 //
 // The gate consults, in order:
-//   1. Bash denylist (built-in patterns; non-overridable).
-//   2. Path scope check for file tools.
-//   3. Config denylist patterns.
-//   4. Config allowlist patterns.
-//   5. Default policy (read-only auto-approved; mutating ops require
-//      approval in "ask" mode).
-//   6. Mode-specific resolution: ask → prompt user; allow → deny;
-//      yolo → approve.
+//  1. Bash denylist (built-in patterns; non-overridable).
+//  2. Path scope check for file tools.
+//  3. Config denylist patterns.
+//  4. Config allowlist patterns.
+//  5. Default policy (read-only auto-approved; mutating ops require
+//     approval in "ask" mode).
+//  6. Mode-specific resolution: ask → prompt user; allow → deny;
+//     yolo → approve.
 //
 // Slice 3 wires the policy plumbing, the bash denylist, and path
 // scoping. The interactive prompt path (modal in the TUI) lives in
@@ -43,16 +43,16 @@ var regexDenylist = []regexRule{
 // dangerousRmTargets lists path arguments that, combined with both -r
 // and -f flags on rm, trigger a refusal. Compared after normalization.
 var dangerousRmTargets = map[string]struct{}{
-	"/":      {},
-	"/*":     {},
-	"~":      {},
-	"~/":     {},
-	"~/*":    {},
-	"$HOME":  {},
-	"$HOME/": {},
-	"${HOME}": {},
+	"/":        {},
+	"/*":       {},
+	"~":        {},
+	"~/":       {},
+	"~/*":      {},
+	"$HOME":    {},
+	"$HOME/":   {},
+	"${HOME}":  {},
 	"${HOME}/": {},
-	"/.":     {},
+	"/.":       {},
 }
 
 // IsBashDenied reports whether command matches any built-in denylist

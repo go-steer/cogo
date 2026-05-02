@@ -5,11 +5,11 @@ import "testing"
 func TestParseSlash(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
-		name       string
-		input      string
-		wantAction SlashAction
+		name        string
+		input       string
+		wantAction  SlashAction
 		wantIsSlash bool
-		wantCmd    string
+		wantCmd     string
 	}{
 		{"plain text", "hello world", "", false, ""},
 		{"help", "/help", SlashHelp, true, "help"},

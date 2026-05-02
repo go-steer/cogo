@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Reformat all Go source: gofmt -s + goimports (with local-prefix grouping).
+set -euo pipefail
+. "$(dirname "$0")/common.sh"
+cd "$(repo_root)"
+
+ensure_tool goimports golang.org/x/tools/cmd/goimports@latest
+
+# gofmt is part of the toolchain; goimports adds import grouping.
+# Both are idempotent.
+gofmt -s -w .
+goimports -w -local github.com/go-steer/cogo .

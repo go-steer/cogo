@@ -12,8 +12,8 @@ import (
 	"fmt"
 	"os"
 
-	adkgemini "google.golang.org/adk/model/gemini"
 	adkmodel "google.golang.org/adk/model"
+	adkgemini "google.golang.org/adk/model/gemini"
 	"google.golang.org/genai"
 
 	"github.com/go-steer/cogo/internal/config"

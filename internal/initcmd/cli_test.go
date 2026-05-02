@@ -1,7 +1,6 @@
 package initcmd
 
 import (
-	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -85,7 +84,6 @@ func TestRunCLI_BadFlag(t *testing.T) {
 // its temp file lazily without the caller juggling defers.
 type captureFile struct {
 	name string
-	buf  *bytes.Buffer
 }
 
 func (c *captureFile) f(t *testing.T) *os.File {

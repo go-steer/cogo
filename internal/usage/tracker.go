@@ -28,8 +28,8 @@ type Totals struct {
 // Thread-safe: the agent goroutine (or headless run loop) calls
 // Append; the TUI's render path reads via Last/Totals/All.
 type Tracker struct {
-	mu       sync.Mutex
-	turns    []Turn
+	mu        sync.Mutex
+	turns     []Turn
 	startedAt time.Time
 }
 

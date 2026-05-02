@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Compile every package. Catches packages that don't build but have no tests.
+set -euo pipefail
+. "$(dirname "$0")/common.sh"
+cd "$(repo_root)"
+exec go build ./...

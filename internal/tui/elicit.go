@@ -31,8 +31,8 @@ type elicitFieldKind int
 
 const (
 	fieldString elicitFieldKind = iota
-	fieldEnum            // string with an enum constraint
-	fieldNumber          // floating-point
+	fieldEnum                   // string with an enum constraint
+	fieldNumber                 // floating-point
 	fieldInteger
 	fieldBoolean
 )
@@ -149,9 +149,9 @@ func parseSchema(rawSchema any) ([]elicitField, error) {
 		return nil, fmt.Errorf("elicit: schema marshal: %w", err)
 	}
 	var schema struct {
-		Type       string                    `json:"type"`
+		Type       string                     `json:"type"`
 		Properties map[string]json.RawMessage `json:"properties"`
-		Required   []string                  `json:"required"`
+		Required   []string                   `json:"required"`
 	}
 	if err := json.Unmarshal(body, &schema); err != nil {
 		return nil, fmt.Errorf("elicit: schema parse: %w", err)
@@ -217,8 +217,8 @@ func parseSchema(rawSchema any) ([]elicitField, error) {
 // nextField cycles the focus forward, wrapping at the end. Each
 // transition refocuses textinputs as appropriate so the cursor blinks
 // in the right place.
-func (s *elicitState) nextField()     { s.shiftFocus(+1) }
-func (s *elicitState) prevField()     { s.shiftFocus(-1) }
+func (s *elicitState) nextField() { s.shiftFocus(+1) }
+func (s *elicitState) prevField() { s.shiftFocus(-1) }
 
 func (s *elicitState) shiftFocus(delta int) {
 	if len(s.Fields) == 0 {

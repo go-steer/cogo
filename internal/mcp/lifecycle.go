@@ -184,7 +184,9 @@ func startOne(ctx context.Context, name string, spec ServerSpec, send func(strin
 func transportFor(spec ServerSpec) (mcpsdk.Transport, *exec.Cmd, error) {
 	switch spec.Transport {
 	case "stdio":
-		cmd := exec.Command(spec.Command, spec.Args...)
+		// Spec is sourced from the user's own .agents/mcp.json; spawning
+		// the configured command is the contract.
+		cmd := exec.Command(spec.Command, spec.Args...) // #nosec G204
 		// Apply env interpolation; only set non-empty values so we
 		// don't accidentally clobber inherited env with empty strings.
 		env := InterpolateMap(spec.Env)
@@ -199,7 +201,7 @@ func transportFor(spec ServerSpec) (mcpsdk.Transport, *exec.Cmd, error) {
 	case "http":
 		headers := InterpolateMap(spec.Headers)
 		client := &http.Client{}
-		var rt http.RoundTripper = http.DefaultTransport
+		rt := http.DefaultTransport
 		if len(headers) > 0 {
 			rt = &headerTransport{base: rt, headers: headers}
 		}

@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# CI delegator: govulncheck via dev/tools/verify-vuln.
+set -euo pipefail
+exec "$(dirname "$0")/../../tools/verify-vuln" "$@"

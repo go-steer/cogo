@@ -30,7 +30,7 @@ func (listCtx) ReadonlyState() session.ReadonlyState { return emptyState{} }
 // emptyState is a no-op ReadonlyState for the same purpose as listCtx.
 type emptyState struct{}
 
-func (emptyState) Get(string) (any, error)       { return nil, session.ErrStateKeyNotExist }
+func (emptyState) Get(string) (any, error) { return nil, session.ErrStateKeyNotExist }
 func (emptyState) All() iter.Seq2[string, any] {
 	return func(yield func(string, any) bool) {}
 }

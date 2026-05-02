@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# CI delegator: runs the unit test suite via dev/tools/test-unit.
+set -euo pipefail
+exec "$(dirname "$0")/../../tools/test-unit" "$@"

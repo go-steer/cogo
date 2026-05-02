@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# CI delegator: runs golangci-lint via dev/tools/lint-go.
+set -euo pipefail
+exec "$(dirname "$0")/../../tools/lint-go" "$@"

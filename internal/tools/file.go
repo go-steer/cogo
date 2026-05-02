@@ -46,8 +46,8 @@ type editFileArgs struct {
 }
 
 type editFileResult struct {
-	Status      string `json:"status"`
-	Replacements int   `json:"replacements"`
+	Status       string `json:"status"`
+	Replacements int    `json:"replacements"`
 }
 
 type listDirArgs struct {

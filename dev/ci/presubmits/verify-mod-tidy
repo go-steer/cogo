@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# CI delegator: go mod tidy verification via dev/tools/verify-mod-tidy.
+set -euo pipefail
+exec "$(dirname "$0")/../../tools/verify-mod-tidy" "$@"

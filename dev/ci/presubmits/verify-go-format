@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# CI delegator: gofmt + goimports verification via dev/tools/verify-go-format.
+set -euo pipefail
+exec "$(dirname "$0")/../../tools/verify-go-format" "$@"

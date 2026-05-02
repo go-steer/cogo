@@ -6,17 +6,17 @@ import "github.com/charmbracelet/lipgloss"
 // of truth for colors, padding, and borders. AdaptiveColor pairs let
 // each style render correctly on light and dark terminals.
 type Styles struct {
-	Header        lipgloss.Style
-	HeaderAccent  lipgloss.Style
-	UserPrefix    lipgloss.Style
-	UserText      lipgloss.Style
-	Assistant     lipgloss.Style
-	System        lipgloss.Style
-	Error         lipgloss.Style
-	InputBorder   lipgloss.Style
-	Spinner       lipgloss.Style
-	Footer        lipgloss.Style
-	Confirm       lipgloss.Style
+	Header       lipgloss.Style
+	HeaderAccent lipgloss.Style
+	UserPrefix   lipgloss.Style
+	UserText     lipgloss.Style
+	Assistant    lipgloss.Style
+	System       lipgloss.Style
+	Error        lipgloss.Style
+	InputBorder  lipgloss.Style
+	Spinner      lipgloss.Style
+	Footer       lipgloss.Style
+	Confirm      lipgloss.Style
 }
 
 // DefaultStyles returns the Slice 2 visual identity. Explicit theme
@@ -27,7 +27,7 @@ func DefaultStyles() Styles {
 	accent := lipgloss.AdaptiveColor{Light: "#005f87", Dark: "#5fafff"}
 	user := lipgloss.AdaptiveColor{Light: "#0050a0", Dark: "#87afff"}
 	assistant := lipgloss.AdaptiveColor{Light: "#1e1e1e", Dark: "#d0d0d0"}
-	systemc := lipgloss.AdaptiveColor{Light: "#5f5f5f", Dark: "#a8a8a8"}
+	systemColor := lipgloss.AdaptiveColor{Light: "#5f5f5f", Dark: "#a8a8a8"}
 	errorc := lipgloss.AdaptiveColor{Light: "#af0000", Dark: "#ff5f5f"}
 	border := lipgloss.AdaptiveColor{Light: "#bcbcbc", Dark: "#5f5f5f"}
 
@@ -46,7 +46,7 @@ func DefaultStyles() Styles {
 		Assistant: lipgloss.NewStyle().
 			Foreground(assistant),
 		System: lipgloss.NewStyle().
-			Foreground(systemc).
+			Foreground(systemColor).
 			Italic(true),
 		Error: lipgloss.NewStyle().
 			Foreground(errorc).

@@ -15,19 +15,19 @@ const fileEntryLimit = 200
 // excludedDirs are skipped during the file walk. Heavy build / cache /
 // VCS dirs that are almost never the right thing to reference.
 var excludedDirs = map[string]bool{
-	".git":            true,
-	"node_modules":    true,
-	"vendor":          true,
-	"dist":            true,
-	"build":           true,
-	".next":           true,
-	".cache":          true,
-	"target":          true,
-	".venv":           true,
-	"__pycache__":     true,
-	".idea":           true,
-	".vscode":         true,
-	".terraform":      true,
+	".git":         true,
+	"node_modules": true,
+	"vendor":       true,
+	"dist":         true,
+	"build":        true,
+	".next":        true,
+	".cache":       true,
+	"target":       true,
+	".venv":        true,
+	"__pycache__":  true,
+	".idea":        true,
+	".vscode":      true,
+	".terraform":   true,
 }
 
 // listProjectFiles walks root and returns up to fileEntryLimit files

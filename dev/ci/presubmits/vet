@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# CI delegator: runs `go vet ./...` via dev/tools/vet.
+set -euo pipefail
+exec "$(dirname "$0")/../../tools/vet" "$@"

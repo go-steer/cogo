@@ -20,7 +20,7 @@ type TodoStore struct {
 // TodoItem is one entry in the agent's plan.
 type TodoItem struct {
 	ID     int    `json:"id"`
-	Status string `json:"status"`           // "pending" | "in_progress" | "completed"
+	Status string `json:"status"` // "pending" | "in_progress" | "completed"
 	Text   string `json:"text"`
 }
 

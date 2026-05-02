@@ -77,10 +77,11 @@ func (f *FakeModel) GenerateContent(_ context.Context, _ *model.LLMRequest, stre
 			TurnComplete: true,
 		}
 		if sr.InputTokens > 0 || sr.OutputTokens > 0 {
+			// Test fixtures only — small token counts, no overflow risk.
 			final.UsageMetadata = &genai.GenerateContentResponseUsageMetadata{
-				PromptTokenCount:     int32(sr.InputTokens),
-				CandidatesTokenCount: int32(sr.OutputTokens),
-				TotalTokenCount:      int32(sr.InputTokens + sr.OutputTokens),
+				PromptTokenCount:     int32(sr.InputTokens),                   // #nosec G115
+				CandidatesTokenCount: int32(sr.OutputTokens),                  // #nosec G115
+				TotalTokenCount:      int32(sr.InputTokens + sr.OutputTokens), // #nosec G115
 			}
 		}
 		yield(final, nil)

@@ -32,8 +32,8 @@ import (
 
 // Exit codes — kept distinct so CI can disambiguate failure modes.
 const (
-	ExitOK         = 0
-	ExitAgentError = 1
+	ExitOK          = 0
+	ExitAgentError  = 1
 	ExitConfigError = 2
 )
 

@@ -31,8 +31,8 @@ func TestLoad_NothingFound(t *testing.T) {
 func TestLoad_ProjectFallbackChain(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
-		name      string
-		fileName  string
+		name         string
+		fileName     string
 		wantInPrompt string
 	}{
 		{"agents.md", "AGENTS.md", "AGENTS body"},

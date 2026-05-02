@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Run govulncheck against every package — flags known CVEs in deps that
+# are actually reachable from this codebase.
+set -euo pipefail
+. "$(dirname "$0")/common.sh"
+cd "$(repo_root)"
+
+ensure_tool govulncheck golang.org/x/vuln/cmd/govulncheck@latest
+
+exec govulncheck ./...

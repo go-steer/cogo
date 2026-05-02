@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Run `go vet ./...` from the repo root.
+set -euo pipefail
+. "$(dirname "$0")/common.sh"
+cd "$(repo_root)"
+exec go vet ./...

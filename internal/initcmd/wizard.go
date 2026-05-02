@@ -135,8 +135,7 @@ func (m *wizardModel) updateProvider(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *wizardModel) updateModel(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "enter":
+	if msg.String() == "enter" {
 		val := m.modelInput.Value()
 		if val == "" {
 			return m, nil

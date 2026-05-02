@@ -1,0 +1,96 @@
+# golangci-lint v2 config for Cogo.
+#
+# Conservative starting set: keeps the noise low while catching real bugs.
+# Add stricter linters (revive, depguard, exhaustruct, etc.) once the
+# baseline is clean and we have a feel for what's worth enforcing.
+#
+# Run with:   dev/tools/lint-go
+# Auto-fix:   dev/tools/lint-go --fix
+
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  default: none
+  enable:
+    # Bug-finders we never want to silence.
+    - errcheck       # unchecked errors
+    - govet          # core vet rules
+    - ineffassign    # ineffectual assignments
+    - staticcheck    # massive bug+style ruleset (now includes stylecheck + gosimple)
+    - unused         # dead code
+
+    # Quality-of-life.
+    - misspell       # common typos in identifiers/comments
+    - unconvert      # unnecessary type conversions
+    - unparam        # unused function parameters
+    - gocritic       # opinionated extra rules; many useful, low false-positive
+
+    # Security.
+    - gosec          # OWASP-style checks (nosec via // #nosec)
+
+  exclusions:
+    # Generated code shouldn't fail the lint.
+    generated: lax
+    presets:
+      - common-false-positives
+      - legacy
+    rules:
+      # Tests can be looser about errcheck (eg. defer f.Close()) and
+      # have permission to use weak random / hardcoded creds.
+      - path: _test\.go
+        linters:
+          - errcheck
+          - gosec
+          - unparam
+      # The MCP SDK exposes some types we deliberately don't fully use;
+      # silence "always returns nil" style noise inside our wrapper.
+      - path: internal/mcp/
+        text: "(unparam|S1009)"
+
+  settings:
+    errcheck:
+      # Noise patterns where checking the error has no useful action:
+      # writing to stderr for a diagnostic, closing a file in defer,
+      # or best-effort cleanup of a temp file. The `_ =` boilerplate
+      # is worse than the missed check here.
+      exclude-functions:
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - fmt.Fprint
+        - (*os.File).Close
+        - os.Remove
+    gocritic:
+      disabled-checks:
+        # "ifElseChain" pushes us toward switch statements that aren't
+        # always clearer; let the author choose.
+        - ifElseChain
+        # commentFormatting is noisy for // TODO style markers.
+        - commentFormatting
+    gosec:
+      excludes:
+        # G104 (errcheck) is already covered by errcheck linter.
+        - G104
+        # G306 (WriteFile permissions): we deliberately use 0o644 for
+        # scaffolded files (config.json, AGENTS.md, .gitignore) so they
+        # behave like normal repo files. Secret material would be
+        # re-flagged at the call site.
+        - G306
+
+formatters:
+  enable:
+    - gofmt          # canonical formatting
+    - goimports      # import grouping + missing imports
+  settings:
+    gofmt:
+      simplify: true
+    goimports:
+      local-prefixes:
+        - github.com/go-steer/cogo
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

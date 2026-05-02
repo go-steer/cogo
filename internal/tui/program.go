@@ -83,7 +83,7 @@ func Run(ctx context.Context, cfg *config.Config, agentsDir string) (int, error)
 	// because their handlers close over the gate.
 	m := NewModel(cfg, nil, mdStyle)
 	prompter := NewPrompter(nil) // wired after p is built
-	elicitor := newTUIElicitor()  // wired after p is built
+	elicitor := newTUIElicitor() // wired after p is built
 
 	gate, err := permissions.FromConfig(cfg, cwd, cogoHome, prompter)
 	if err != nil {

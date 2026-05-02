@@ -101,9 +101,9 @@ func TestWizard_ConfirmNStartsOver(t *testing.T) {
 	t.Parallel()
 	m := newWizardModel()
 	// Walk to confirm step.
-	m = drive(t, m, "enter")              // pick gemini
-	m = drive(t, m, "enter")              // accept default model
-	m = drive(t, m, "enter")              // pick ask mode
+	m = drive(t, m, "enter") // pick gemini
+	m = drive(t, m, "enter") // accept default model
+	m = drive(t, m, "enter") // pick ask mode
 	if m.step != stepConfirm {
 		t.Fatalf("expected stepConfirm, got %v", m.step)
 	}

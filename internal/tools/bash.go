@@ -14,8 +14,8 @@ import (
 )
 
 type bashArgs struct {
-	Command string `json:"command" jsonschema:"single shell command to execute via /bin/sh -c"`
-	TimeoutSeconds int `json:"timeout_seconds,omitempty" jsonschema:"max wall time for the command (default 30)"`
+	Command        string `json:"command" jsonschema:"single shell command to execute via /bin/sh -c"`
+	TimeoutSeconds int    `json:"timeout_seconds,omitempty" jsonschema:"max wall time for the command (default 30)"`
 }
 
 type bashResult struct {
@@ -42,7 +42,10 @@ func bashFunc(gate *permissions.Gate, cfg *config.Config) functiontool.Func[bash
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
 
-		cmd := exec.CommandContext(ctx, "/bin/sh", "-c", in.Command)
+		// Running an arbitrary user-supplied command is the whole point
+		// of the bash tool; gating happens via the permission gate, not
+		// at the exec call site.
+		cmd := exec.CommandContext(ctx, "/bin/sh", "-c", in.Command) // #nosec G204
 		var stdout, stderr capBuffer
 		caps := capsFor(cfg, "bash", 64*1024, 2000)
 		stdout.maxBytes = caps.bytes
