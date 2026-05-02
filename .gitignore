@@ -47,3 +47,6 @@ go.work.sum
 
 # Local environment overrides
 .env.local
+
+# Personal working notes — kept on disk but not in version control.
+TODO.md
