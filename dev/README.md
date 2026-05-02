@@ -60,6 +60,25 @@ dev/
 That's it — the delegator pattern means the GitHub workflow never has
 to know what the check actually does.
 
+## CI on `dev` → `main` PRs
+
+Pushing to `dev` runs the full CI pipeline. When you then open a PR
+from `dev` to `main`, the CI jobs are **skipped** — the same HEAD SHA
+already has green status checks from the `dev` push, and status checks
+are SHA-scoped, so branch protection on `main` is satisfied without
+re-running.
+
+For this to actually gate merges, the repo's branch protection on
+`main` must require these checks (settings → branches → main):
+
+- `test`
+- `lint`
+- `tidy`
+- `vuln`
+
+PRs from feature branches or forks (any HEAD that isn't `dev`) still
+run CI normally.
+
 ## License headers
 
 Every source file carries a two-line SPDX header at the top:
