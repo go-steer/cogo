@@ -11,6 +11,8 @@ type KeyMap struct {
 	ClearView  key.Binding // Ctrl+L — clears viewport (history preserved)
 	ScrollUp   key.Binding
 	ScrollDown key.Binding
+	LineUp     key.Binding // Up arrow — scrolls viewport when input empty
+	LineDown   key.Binding // Down arrow — scrolls viewport when input empty
 }
 
 // DefaultKeyMap returns Cogo's V1 bindings.
@@ -39,6 +41,14 @@ func DefaultKeyMap() KeyMap {
 		ScrollDown: key.NewBinding(
 			key.WithKeys("pgdown"),
 			key.WithHelp("pgdown", "scroll down"),
+		),
+		LineUp: key.NewBinding(
+			key.WithKeys("up"),
+			key.WithHelp("↑", "scroll up (when input empty)"),
+		),
+		LineDown: key.NewBinding(
+			key.WithKeys("down"),
+			key.WithHelp("↓", "scroll down (when input empty)"),
 		),
 	}
 }

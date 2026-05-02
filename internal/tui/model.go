@@ -39,6 +39,11 @@ type Model struct {
 	styles   Styles
 	md       *MarkdownRenderer
 
+	// Style name passed to Glamour. Resolved once at construction so
+	// repeat renderer builds (on every resize) don't re-query the
+	// terminal background.
+	mdStyle string
+
 	width  int
 	height int
 
@@ -56,7 +61,12 @@ type Model struct {
 
 // NewModel constructs a fresh chat session bound to a configured agent.
 // The program reference is set later via SetProgram.
-func NewModel(cfg *config.Config, a *agent.Agent) *Model {
+//
+// mdStyle picks the Glamour style ("dark" or "light") for assistant
+// markdown rendering. Detect this once before tea.NewProgram (see
+// program.Run); resolving it during the program's lifetime causes
+// Glamour's background-color query response to leak into the textarea.
+func NewModel(cfg *config.Config, a *agent.Agent, mdStyle string) *Model {
 	ta := textarea.New()
 	ta.Placeholder = "Type a message, or /help…"
 	ta.ShowLineNumbers = false
@@ -69,7 +79,7 @@ func NewModel(cfg *config.Config, a *agent.Agent) *Model {
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
 
-	md, _ := NewMarkdownRenderer(80) // tightened on first WindowSizeMsg
+	md, _ := NewMarkdownRenderer(80, mdStyle) // tightened on first WindowSizeMsg
 
 	m := &Model{
 		cfg:                 cfg,
@@ -80,6 +90,7 @@ func NewModel(cfg *config.Config, a *agent.Agent) *Model {
 		keys:                DefaultKeyMap(),
 		styles:              DefaultStyles(),
 		md:                  md,
+		mdStyle:             mdStyle,
 		state:               StateIdle,
 		currentAssistantIdx: -1,
 	}
@@ -134,9 +145,14 @@ func (m *Model) renderMessage(msg Message) string {
 	}
 }
 
-// refreshViewport re-renders the history into the viewport and scrolls
-// to the bottom. Called whenever history changes.
+// refreshViewport re-renders the history into the viewport. If the user
+// was already pinned to the bottom (the common "tail" position), scroll
+// stays at the bottom as new content arrives. If they had scrolled up
+// to read history, leave them where they were.
 func (m *Model) refreshViewport() {
+	atBottom := m.viewport.AtBottom()
 	m.viewport.SetContent(m.renderHistory())
-	m.viewport.GotoBottom()
+	if atBottom {
+		m.viewport.GotoBottom()
+	}
 }

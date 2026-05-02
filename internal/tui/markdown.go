@@ -10,15 +10,26 @@ type MarkdownRenderer struct {
 	r *glamour.TermRenderer
 }
 
-// NewMarkdownRenderer constructs a renderer with auto-detected terminal
-// styling and word wrap at width characters. Width <= 0 disables wrap.
+// NewMarkdownRenderer constructs a renderer with a fixed style name and
+// word wrap at width characters. Width <= 0 disables wrap.
+//
+// styleName must be a recognized Glamour style ("dark", "light",
+// "notty", etc.). We deliberately avoid glamour.WithAutoStyle() here:
+// it issues an OSC-11 background-color query to the terminal every
+// call, and once Bubble Tea is reading stdin, the terminal's response
+// races into the textarea as input. The TUI detects light vs dark
+// once at startup (before tea.NewProgram) and threads the result
+// through this constructor.
 //
 // Returns a usable (no-op) renderer plus a non-nil error if Glamour
 // initialization fails so the TUI can keep running with raw markdown
 // rather than crashing.
-func NewMarkdownRenderer(width int) (*MarkdownRenderer, error) {
+func NewMarkdownRenderer(width int, styleName string) (*MarkdownRenderer, error) {
+	if styleName == "" {
+		styleName = "dark"
+	}
 	opts := []glamour.TermRendererOption{
-		glamour.WithAutoStyle(),
+		glamour.WithStandardStyle(styleName),
 	}
 	if width > 0 {
 		opts = append(opts, glamour.WithWordWrap(width))

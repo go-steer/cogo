@@ -25,7 +25,7 @@ func newTestModel(t *testing.T, script []testutil.ScriptedResponse) *teatest.Tes
 	if err != nil {
 		t.Fatalf("agent.New: %v", err)
 	}
-	m := NewModel(cfg, a)
+	m := NewModel(cfg, a, "dark")
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(80, 24))
 	m.SetProgram(tm.GetProgram())
 	return tm

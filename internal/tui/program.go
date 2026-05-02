@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/go-steer/cogo/internal/agent"
 	"github.com/go-steer/cogo/internal/config"
@@ -38,8 +39,24 @@ func Run(ctx context.Context, cfg *config.Config) (int, error) {
 		return ExitConfigError, err
 	}
 
-	m := NewModel(cfg, a)
-	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
+	// Detect terminal background BEFORE tea.NewProgram takes over stdin.
+	// Glamour's WithAutoStyle sends an OSC-11 query whose response
+	// would otherwise race into the textarea as input. Resolving the
+	// style name once up front and threading it through NewModel keeps
+	// every Glamour rebuild (resize, etc.) silent.
+	mdStyle := "dark"
+	if !lipgloss.HasDarkBackground() {
+		mdStyle = "light"
+	}
+
+	m := NewModel(cfg, a, mdStyle)
+	// Note: deliberately NOT enabling tea.WithMouseCellMotion — capturing
+	// mouse events globally breaks terminal-native text selection (copy /
+	// paste) and makes mouse interaction in the input area feel wrong.
+	// Scrolling is keyboard-driven (PgUp/PgDn, plus Up/Down when the
+	// input is empty). Mouse-wheel scroll can come back later behind a
+	// runtime toggle.
+	p := tea.NewProgram(m, tea.WithAltScreen())
 	m.SetProgram(p)
 
 	if _, err := p.Run(); err != nil {

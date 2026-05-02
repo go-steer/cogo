@@ -52,8 +52,9 @@ func (m *Model) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	m.viewport.Width = m.width
 	m.viewport.Height = vpH
 	m.textarea.SetWidth(m.width - 4) // border + padding
-	// Re-init markdown renderer at the new wrap width.
-	if md, err := NewMarkdownRenderer(m.width - 2); err == nil {
+	// Re-init markdown renderer at the new wrap width. Using the
+	// pre-resolved style name avoids re-querying the terminal.
+	if md, err := NewMarkdownRenderer(m.width-2, m.mdStyle); err == nil {
 		m.md = md
 	}
 	m.refreshViewport()
@@ -67,6 +68,22 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.ClearView):
 		m.viewport.GotoTop()
 		return m, nil
+	case key.Matches(msg, m.keys.ScrollUp), key.Matches(msg, m.keys.ScrollDown):
+		// PgUp/PgDn always scroll the viewport.
+		m.pendingExit = false
+		var cmd tea.Cmd
+		m.viewport, cmd = m.viewport.Update(msg)
+		return m, cmd
+	case key.Matches(msg, m.keys.LineUp), key.Matches(msg, m.keys.LineDown):
+		// Up/Down scroll the viewport line-by-line — but only when the
+		// input is empty, so multi-line cursor navigation still works
+		// normally while composing a message.
+		if m.textarea.Value() == "" {
+			m.pendingExit = false
+			var cmd tea.Cmd
+			m.viewport, cmd = m.viewport.Update(msg)
+			return m, cmd
+		}
 	case key.Matches(msg, m.keys.Submit):
 		// Submit Enter only fires a turn when idle. While streaming we
 		// swallow it so users don't accidentally enqueue a half-composed

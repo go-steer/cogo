@@ -63,8 +63,12 @@ func HelpText() string {
 		"  /quit       exit Cogo (alias: /exit)",
 		"",
 		"Keys:",
+		"  PgUp/PgDn   scroll chat history",
+		"  ↑/↓         scroll chat history when input is empty (cursor in input otherwise)",
 		"  Ctrl+C      cancel current turn (or exit when idle)",
 		"  Ctrl+L      clear the viewport (history preserved)",
+		"",
+		"Mouse selection / copy / paste use your terminal's normal behavior.",
 		"",
 		"More commands (/model, /mcp, /skills, /memory, /stats) arrive in a later release.",
 	}, "\n")
