@@ -175,6 +175,14 @@ func Run(ctx context.Context, cfg *config.Config, agentsDir string) (int, error)
 			if err != nil {
 				return reloadResult{}, fmt.Errorf("memory: %w", err)
 			}
+			// Tear down the previous generation of MCP servers BEFORE
+			// starting the new ones so stdio child processes get
+			// reaped instead of leaking. Closing the model's current
+			// servers is safe because /reload only fires from the
+			// program goroutine that also owns the model.
+			for _, old := range m.mcpServers {
+				old.Close()
+			}
 			newMCPServers, newMCPToolsets, err := mcp.Build(ctx, agentsDir, send, gate)
 			if err != nil {
 				return reloadResult{}, fmt.Errorf("mcp: %w", err)
@@ -232,15 +240,23 @@ func Run(ctx context.Context, cfg *config.Config, agentsDir string) (int, error)
 		return ExitRunError, fmt.Errorf("tui: %w", err)
 	}
 
-	// Persist transcript on exit when we have a project root. Failures
-	// here are non-fatal; we report to stderr so they're visible after
-	// the alt-screen is torn down.
-	if fm, ok := finalModel.(*Model); ok && agentsDir != "" {
-		path, err := saveTranscript(agentsDir, startedAt, fm)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "cogo: transcript save: %v\n", err)
-		} else if path != "" {
-			fmt.Fprintf(os.Stderr, "cogo: transcript saved to %s\n", path)
+	if fm, ok := finalModel.(*Model); ok {
+		// Reap stdio MCP children before we exit. They'd be reaped by
+		// init eventually anyway, but doing it here keeps the
+		// process-leak window small and makes `ps` cleaner.
+		for _, srv := range fm.mcpServers {
+			srv.Close()
+		}
+		// Persist transcript on exit when we have a project root.
+		// Failures are non-fatal; we report to stderr so they're
+		// visible after the alt-screen is torn down.
+		if agentsDir != "" {
+			path, err := saveTranscript(agentsDir, startedAt, fm)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "cogo: transcript save: %v\n", err)
+			} else if path != "" {
+				fmt.Fprintf(os.Stderr, "cogo: transcript saved to %s\n", path)
+			}
 		}
 	}
 	return ExitOK, nil

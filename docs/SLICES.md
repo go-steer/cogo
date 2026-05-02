@@ -140,7 +140,6 @@ Each slice gets its own detailed plan written **at the start of that slice** (in
 - `internal/session/` — transcript writer; persists `.agents/sessions/<timestamp>.json` on `/quit` and Ctrl+C; atomic temp + rename.
 - `internal/log/` — `--debug` flips slog handler to a JSONL handler writing under `.agents/logs/<timestamp>.jsonl`.
 - **Schema-driven MCP elicitation modal** — Slice 4b stubs `ElicitationHandler` to decline-with-notice. Build a Bubble Tea form that renders the request's JSON Schema (text inputs for strings, lists for enums, etc.), wired through a channel like the permission flow.
-- **MCP child-process cleanup on `/reload`** — `/reload` (shipped in 5b) rebuilds the agent in place, but the previous MCP toolsets aren't cleanly torn down because `mcptoolset` doesn't expose `Close`. Stdio child processes from old generations get reaped only when Cogo exits. For long sessions with many reloads this leaks. Either build our own thin `mcp.Client` wrapper that exposes `Close`, or upstream a `Close` accessor on `mcptoolset`. One-day polish.
 - Top-level:
   - `.goreleaser.yaml` — cross-platform builds (linux/darwin × amd64/arm64); checksums; archive layout.
   - `.github/workflows/ci.yml` — `go test ./...` on push/PR across a small Go matrix.

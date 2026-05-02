@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"sort"
 	"sync"
+	"syscall"
+	"time"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"google.golang.org/adk/tool"
@@ -34,11 +36,41 @@ type Server struct {
 	Tools   []string // tool names exposed; populated lazily by Toolset
 	Err     error    // non-nil when Status == StatusError
 	toolset tool.Toolset
+	cmd     *exec.Cmd // stdio child; nil for http transports
 }
 
 // Toolset returns the MCP toolset, or nil for failed servers. Used by
 // program.go to feed agent.WithToolsets.
 func (s *Server) Toolset() tool.Toolset { return s.toolset }
+
+// Close terminates any child process this server owns. Called from
+// /reload before swapping in a fresh generation of servers, so stdio
+// MCP children don't pile up across reloads.
+//
+// For HTTP transports there's no process to kill — Close is a no-op.
+//
+// Termination strategy: SIGTERM, give the process up to 3 seconds to
+// exit gracefully, then SIGKILL. Wait is called either way to reap
+// the zombie. Errors (process already exited, etc.) are swallowed —
+// the only thing the caller can do with them is log, and we have no
+// logger here.
+func (s *Server) Close() {
+	if s == nil || s.cmd == nil || s.cmd.Process == nil {
+		return
+	}
+	done := make(chan struct{})
+	go func() {
+		_, _ = s.cmd.Process.Wait()
+		close(done)
+	}()
+	_ = s.cmd.Process.Signal(syscall.SIGTERM)
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		_ = s.cmd.Process.Kill()
+		<-done
+	}
+}
 
 // Build reads .agents/mcp.json and starts every declared server in
 // parallel. The send callback is plumbed into each server's elicitation
@@ -93,12 +125,13 @@ func Build(ctx context.Context, agentsDir string, send func(string), gate *permi
 func startOne(ctx context.Context, name string, spec ServerSpec, send func(string), gate *permissions.Gate) *Server {
 	srv := &Server{Name: name}
 
-	transport, err := transportFor(spec)
+	transport, cmd, err := transportFor(spec)
 	if err != nil {
 		srv.Status = StatusError
 		srv.Err = err
 		return srv
 	}
+	srv.cmd = cmd
 
 	client := mcpsdk.NewClient(
 		&mcpsdk.Implementation{Name: "cogo", Version: "0.1.0"},
@@ -141,7 +174,9 @@ func startOne(ctx context.Context, name string, spec ServerSpec, send func(strin
 }
 
 // transportFor builds the appropriate mcp.Transport for the spec.
-func transportFor(spec ServerSpec) (mcpsdk.Transport, error) {
+// For stdio it also returns the *exec.Cmd so the Server can hold a
+// reference for shutdown; for http the cmd is nil.
+func transportFor(spec ServerSpec) (mcpsdk.Transport, *exec.Cmd, error) {
 	switch spec.Transport {
 	case "stdio":
 		cmd := exec.Command(spec.Command, spec.Args...)
@@ -155,7 +190,7 @@ func transportFor(spec ServerSpec) (mcpsdk.Transport, error) {
 				cmd.Env = append(cmd.Env, k+"="+v)
 			}
 		}
-		return &mcpsdk.CommandTransport{Command: cmd}, nil
+		return &mcpsdk.CommandTransport{Command: cmd}, cmd, nil
 	case "http":
 		headers := InterpolateMap(spec.Headers)
 		client := &http.Client{}
@@ -167,9 +202,9 @@ func transportFor(spec ServerSpec) (mcpsdk.Transport, error) {
 		return &mcpsdk.StreamableClientTransport{
 			Endpoint:   spec.URL,
 			HTTPClient: client,
-		}, nil
+		}, nil, nil
 	default:
-		return nil, fmt.Errorf("unknown transport %q", spec.Transport)
+		return nil, nil, fmt.Errorf("unknown transport %q", spec.Transport)
 	}
 }
 
