@@ -2,7 +2,7 @@
 
 A terminal-native agentic CLI for Go developers — think *Claude Code* but Go-native, built on the Google ADK and Gemini 3.x. Configurable per project via a `.agents/` directory, with first-class support for MCP servers and Claude-compatible skills.
 
-> **Status:** V1 in active development. All Slice 4 features are up: full Claude-Code-like surface — TUI + tools + permissions + project memory + cost surfacing + `/model` picker + MCP servers + Claude-compatible skills + `cogo init` (silent + interactive wizard). Polish (OTEL, transcript persistence, goreleaser/CI, deletion of the spike binaries) lands in Slice 5. See [`docs/REQUIREMENTS.md`](./docs/REQUIREMENTS.md) for the full V1 scope and [`docs/SLICES.md`](./docs/SLICES.md) for the build order.
+> **Status:** V1 feature-complete on `dev` — full Claude-Code-like surface: TUI with streaming markdown, slash and `@`-file palettes, prompt history, built-in tools (file / bash / todo) gated by a permission system with non-overridable bash denylist + path scoping, Claude-compatible skills, MCP server integration with elicitation stub, project memory with fallback chain, mid-session model switching, `cogo init` wizard, OpenTelemetry instrumentation, session transcript persistence on exit, `--debug` JSONL log, and `/reload` to refresh `.agents/` in place. Remaining polish (CI + goreleaser, MCP child-process cleanup, schema-driven elicitation modal) is enumerated in [`docs/SLICES.md`](./docs/SLICES.md) Slice 5.
 
 ## Why
 
@@ -37,7 +37,7 @@ go run ./cmd/cogo -p "What is 2+2?"
 
 See [`.env.example`](./.env.example) for a copy-pasteable template.
 
-## What works today (Slices 1–3)
+## What works today
 
 - `cogo -p "<prompt>"` runs a single turn and streams the assistant's response to stdout (Slice 1).
 - `cogo` (no args, on a TTY) opens an interactive Bubble Tea chat: streaming text in real time, markdown rendering on completion, multi-line input (Shift+Enter for newline), and `/help` / `/clear` / `/quit` slash commands (Slice 2).
@@ -56,7 +56,7 @@ See [`.env.example`](./.env.example) for a copy-pasteable template.
 - `.agents/config.json` is auto-discovered (walks up from the working directory like `.git`); falls back to built-in defaults when absent.
 - Provider auto-detection from environment variables when `model.provider` is not set in config.
 
-OTEL wiring, transcript persistence, the schema-driven elicitation modal, and goreleaser/CI land in Slice 5.
+CI + goreleaser, the schema-driven MCP elicitation modal, and proper child-process cleanup on `/reload` are tracked in [`docs/SLICES.md`](./docs/SLICES.md) Slice 5 polish bullets.
 
 ## Tests
 
@@ -74,7 +74,8 @@ GOOGLE_CLOUD_LOCATION=... \
 
 - [`docs/REQUIREMENTS.md`](./docs/REQUIREMENTS.md) — V1 scope, FRs and NFRs, resolved-decisions log.
 - [`docs/DESIGN.md`](./docs/DESIGN.md) — architecture, configuration sketches, module layout, testing strategy.
-- [`cmd/spike/`](./cmd/spike/) — throwaway program that validated the architecture against real Gemini 3.x before V1 implementation began. Will be deleted in Slice 5.
+- [`docs/SLICES.md`](./docs/SLICES.md) — slice-by-slice build order plus the running list of polish items.
+- [`AGENTS.md`](./AGENTS.md) — project memory that `cogo` itself loads when run inside this repo.
 
 ## License
 

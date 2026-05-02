@@ -8,8 +8,9 @@ type modelPickerState struct {
 }
 
 // availableModels returns the hardcoded list of Gemini 3.x candidate
-// IDs surfaced in the /model picker. Discovered via cmd/probe-models;
-// extend this list as Google ships GA versions or new variants.
+// IDs surfaced in the /model picker. Originally discovered by
+// listing publisher models on the dev Vertex project; extend this
+// list as Google ships GA versions or new variants.
 func availableModels() []string {
 	return []string{
 		"gemini-3.1-pro-preview",

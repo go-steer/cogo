@@ -34,8 +34,6 @@ go.work.sum
 
 # Project-specific binaries (built from ./cmd/...)
 /cogo
-/spike
-/probe-models
 
 # Goreleaser output
 /dist/
