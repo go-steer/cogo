@@ -79,6 +79,7 @@ func Run(ctx context.Context, cfg *config.Config, agentsDir string) (int, error)
 		return ExitConfigError, err
 	}
 	m.agent = a
+	m.scope = gate.Scope()
 
 	// Hook for "Always allow" persistence. For Slice 3 we only persist
 	// path-scope additions to .agents/config.json; bash and other

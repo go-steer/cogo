@@ -31,16 +31,21 @@ var excludedDirs = map[string]bool{
 }
 
 // listProjectFiles walks root and returns up to fileEntryLimit files
-// (not directories) whose path matches filter (case-insensitive
+// AND directories whose path matches filter (case-insensitive
 // substring). Excluded dirs are pruned. The returned paths are
 // relative to root and use forward slashes for cross-platform
-// consistency.
+// consistency. Directory entries are flagged with IsDir so the
+// palette can drill into them on selection.
 func listProjectFiles(root, filter string) []paletteItem {
 	if root == "" {
 		root = "."
 	}
 	low := strings.ToLower(filter)
-	var matches []string
+	type match struct {
+		path  string
+		isDir bool
+	}
+	var matches []match
 	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil
@@ -50,13 +55,12 @@ func listProjectFiles(root, filter string) []paletteItem {
 			if excludedDirs[name] {
 				return fs.SkipDir
 			}
-			// Skip the .agents/sessions and .agents/logs subtrees; the
-			// .agents dir itself stays visible because its config and
-			// memory files are useful references.
 			if rel, _ := filepath.Rel(root, path); rel == ".agents/sessions" || rel == ".agents/logs" {
 				return fs.SkipDir
 			}
-			return nil
+			if path == root {
+				return nil // don't include the root itself as an entry
+			}
 		}
 		rel, err := filepath.Rel(root, path)
 		if err != nil {
@@ -66,34 +70,38 @@ func listProjectFiles(root, filter string) []paletteItem {
 		if filter != "" && !strings.Contains(strings.ToLower(rel), low) {
 			return nil
 		}
-		matches = append(matches, rel)
+		matches = append(matches, match{path: rel, isDir: d.IsDir()})
 		if len(matches) >= fileEntryLimit*4 {
-			// over-collect so the rank+truncate below picks the best.
 			return fs.SkipDir
 		}
 		return nil
 	})
 
-	// Rank: prefix match on the basename first, then substring.
+	// Rank: dirs first (drill-in is usually what you want when filter
+	// matches a directory), then prefix-match files, then substring.
 	type ranked struct {
-		path string
+		m    match
 		rank int
 	}
 	var rs []ranked
-	for _, p := range matches {
-		base := strings.ToLower(filepath.Base(p))
+	for _, m := range matches {
+		base := strings.ToLower(filepath.Base(m.path))
 		switch {
+		case low != "" && m.isDir && (strings.HasPrefix(base, low) || strings.Contains(strings.ToLower(m.path), low)):
+			rs = append(rs, ranked{m, 0})
+		case low == "" && m.isDir:
+			rs = append(rs, ranked{m, 0})
 		case low == "" || strings.HasPrefix(base, low):
-			rs = append(rs, ranked{p, 0})
-		case strings.Contains(strings.ToLower(p), low):
-			rs = append(rs, ranked{p, 1})
+			rs = append(rs, ranked{m, 1})
+		case strings.Contains(strings.ToLower(m.path), low):
+			rs = append(rs, ranked{m, 2})
 		}
 	}
 	sort.SliceStable(rs, func(i, j int) bool {
 		if rs[i].rank != rs[j].rank {
 			return rs[i].rank < rs[j].rank
 		}
-		return rs[i].path < rs[j].path
+		return rs[i].m.path < rs[j].m.path
 	})
 	if len(rs) > fileEntryLimit {
 		rs = rs[:fileEntryLimit]
@@ -101,10 +109,13 @@ func listProjectFiles(root, filter string) []paletteItem {
 
 	out := make([]paletteItem, 0, len(rs))
 	for _, r := range rs {
-		out = append(out, paletteItem{
-			Display: r.path,
-			Value:   "@" + r.path,
-		})
+		display := r.m.path
+		value := "@" + r.m.path
+		if r.m.isDir {
+			display += "/"
+			value += "/"
+		}
+		out = append(out, paletteItem{Display: display, Value: value, IsDir: r.m.isDir})
 	}
 	return out
 }

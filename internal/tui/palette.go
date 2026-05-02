@@ -15,11 +15,14 @@ const (
 
 // paletteItem is one selectable entry. Display is what shows in the
 // list; Value is the literal text inserted on selection; Hint is
-// optional secondary text shown muted.
+// optional secondary text shown muted. IsDir flags directory entries
+// in the file palette so selecting them drills into the dir instead
+// of finalizing the input.
 type paletteItem struct {
 	Display string
 	Value   string
 	Hint    string
+	IsDir   bool
 }
 
 // paletteState is the in-flight state of an open palette overlay.

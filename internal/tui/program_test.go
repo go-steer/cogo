@@ -78,8 +78,12 @@ func TestProgram_HelpCommandShowsHelp(t *testing.T) {
 	tm.Type("/help")
 	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
 
+	// Wait for a string that lives at the *bottom* of the help text:
+	// the viewport autoscrolls to the latest message, so anything near
+	// the start ("Slash commands:") may not be in the visible window.
 	teatest.WaitFor(t, tm.Output(), func(out []byte) bool {
-		return bytes.Contains(out, []byte("Slash commands:"))
+		return bytes.Contains(out, []byte("Mouse selection")) ||
+			bytes.Contains(out, []byte("More commands"))
 	}, teatest.WithDuration(2*time.Second))
 
 	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
@@ -96,6 +100,65 @@ func TestProgram_UnknownSlashShowsHint(t *testing.T) {
 
 	teatest.WaitFor(t, tm.Output(), func(out []byte) bool {
 		return bytes.Contains(out, []byte("Unknown command"))
+	}, teatest.WithDuration(2*time.Second))
+
+	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
+	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(2*time.Second))
+}
+
+func TestProgram_PromptHistoryRecall(t *testing.T) {
+	t.Parallel()
+	tm := newTestModel(t, []testutil.ScriptedResponse{
+		{TextChunks: []string{"ok1"}},
+		{TextChunks: []string{"ok2"}},
+	})
+
+	// Submit two prompts.
+	tm.Type("first prompt")
+	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
+	teatest.WaitFor(t, tm.Output(), func(o []byte) bool {
+		return bytes.Contains(o, []byte("ok1"))
+	}, teatest.WithDuration(2*time.Second))
+
+	tm.Type("second prompt")
+	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
+	teatest.WaitFor(t, tm.Output(), func(o []byte) bool {
+		return bytes.Contains(o, []byte("ok2"))
+	}, teatest.WithDuration(2*time.Second))
+
+	// Up on empty input recalls "second prompt".
+	tm.Send(tea.KeyMsg{Type: tea.KeyUp})
+	teatest.WaitFor(t, tm.Output(), func(o []byte) bool {
+		return bytes.Contains(o, []byte("second prompt"))
+	}, teatest.WithDuration(2*time.Second))
+
+	// Another Up moves to "first prompt".
+	tm.Send(tea.KeyMsg{Type: tea.KeyUp})
+	teatest.WaitFor(t, tm.Output(), func(o []byte) bool {
+		return bytes.Contains(o, []byte("first prompt"))
+	}, teatest.WithDuration(2*time.Second))
+
+	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
+	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(2*time.Second))
+}
+
+func TestProgram_SlashPaletteTabKeepsInputOpen(t *testing.T) {
+	t.Parallel()
+	tm := newTestModel(t, nil)
+
+	tm.Type("/")
+	teatest.WaitFor(t, tm.Output(), func(o []byte) bool {
+		return bytes.Contains(o, []byte("Slash commands"))
+	}, teatest.WithDuration(2*time.Second))
+
+	// Tab should fill (cursor is on /help) without submitting.
+	tm.Send(tea.KeyMsg{Type: tea.KeyTab})
+	teatest.WaitFor(t, tm.Output(), func(o []byte) bool {
+		// After Tab the input should hold "/help " and palette closed
+		// (no "Slash commands" header line).
+		return !bytes.Contains(o, []byte("Slash commands"))
 	}, teatest.WithDuration(2*time.Second))
 
 	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})

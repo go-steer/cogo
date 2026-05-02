@@ -2,10 +2,16 @@ package tui
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 )
+
+func homeDir() string {
+	h, _ := os.UserHomeDir()
+	return h
+}
 
 // View renders the model as a single string. Layout (top to bottom):
 //
@@ -114,13 +120,47 @@ func (m *Model) renderHeader() string {
 	if provider == "" {
 		provider = "auto"
 	}
+	mode := m.cfg.Permissions.Mode
+	if mode == "" {
+		mode = "ask"
+	}
+	cwd := shortDir(m.projectRoot)
+
 	left := fmt.Sprintf("Cogo · %s", m.styles.HeaderAccent.Render(m.cfg.Model.Name))
-	right := fmt.Sprintf("provider: %s", provider)
+	right := fmt.Sprintf("%s · provider: %s · mode: %s", cwd, provider, modeBadge(mode, m.styles))
 	gap := m.width - lipgloss.Width(left) - lipgloss.Width(right)
 	if gap < 1 {
 		gap = 1
 	}
 	return m.styles.Header.Render(left + strings.Repeat(" ", gap) + right)
+}
+
+// shortDir returns the basename of dir prefixed with "~/" when dir is
+// inside the user's home; otherwise it falls back to the absolute
+// basename. Empty dir → "?".
+func shortDir(dir string) string {
+	if dir == "" {
+		return "?"
+	}
+	home := homeDir()
+	if home != "" && (dir == home || strings.HasPrefix(dir, home+"/")) {
+		rel := strings.TrimPrefix(dir, home)
+		return "~" + rel
+	}
+	return dir
+}
+
+// modeBadge styles the permission mode so "yolo" stands out — landing
+// in yolo without realizing it should be visually obvious.
+func modeBadge(mode string, st Styles) string {
+	switch mode {
+	case "yolo":
+		return st.Error.Render(mode)
+	case "ask":
+		return st.HeaderAccent.Render(mode)
+	default:
+		return mode
+	}
 }
 
 func (m *Model) renderInput() string {

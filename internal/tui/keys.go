@@ -9,10 +9,11 @@ type KeyMap struct {
 	Newline    key.Binding
 	Cancel     key.Binding // Ctrl+C — interrupts current turn or exits
 	ClearView  key.Binding // Ctrl+L — clears viewport (history preserved)
+	ClearInput key.Binding // Ctrl+U — clears the textarea (shell convention)
 	ScrollUp   key.Binding
 	ScrollDown key.Binding
-	LineUp     key.Binding // Up arrow — scrolls viewport when input empty
-	LineDown   key.Binding // Down arrow — scrolls viewport when input empty
+	LineUp     key.Binding // Up arrow — recalls history when input empty
+	LineDown   key.Binding // Down arrow — moves forward through recall
 
 	// Permission modal: y allow once, n deny, s allow for the session,
 	// a allow always (persisted).
@@ -40,6 +41,10 @@ func DefaultKeyMap() KeyMap {
 		ClearView: key.NewBinding(
 			key.WithKeys("ctrl+l"),
 			key.WithHelp("ctrl+l", "clear viewport"),
+		),
+		ClearInput: key.NewBinding(
+			key.WithKeys("ctrl+u"),
+			key.WithHelp("ctrl+u", "clear input"),
 		),
 		ScrollUp: key.NewBinding(
 			key.WithKeys("pgup"),

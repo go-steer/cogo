@@ -119,7 +119,7 @@ func (m *Model) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// Palette intercepts up/down/enter/esc when open.
+	// Palette intercepts up/down/enter/esc/tab when open.
 	if m.palette != nil {
 		switch msg.String() {
 		case "up":
@@ -135,6 +135,10 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "esc":
 			m.palette = nil
 			return m, nil
+		case "tab":
+			// Tab fills the highlighted item without submitting (slash
+			// commands stay un-submitted so the user can add args).
+			return m.applyPaletteCompletion()
 		case "enter":
 			return m.applyPaletteSelection()
 		}
@@ -147,21 +151,33 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.ClearView):
 		m.viewport.GotoTop()
 		return m, nil
+	case key.Matches(msg, m.keys.ClearInput):
+		m.textarea.Reset()
+		m.historyCursor = -1
+		m.refreshPalette()
+		return m, nil
 	case key.Matches(msg, m.keys.ScrollUp), key.Matches(msg, m.keys.ScrollDown):
 		// PgUp/PgDn always scroll the viewport.
 		m.pendingExit = false
 		var cmd tea.Cmd
 		m.viewport, cmd = m.viewport.Update(msg)
 		return m, cmd
-	case key.Matches(msg, m.keys.LineUp), key.Matches(msg, m.keys.LineDown):
-		// Up/Down scroll the viewport line-by-line — but only when the
-		// input is empty, so multi-line cursor navigation still works
-		// normally while composing a message.
-		if m.textarea.Value() == "" {
-			m.pendingExit = false
-			var cmd tea.Cmd
-			m.viewport, cmd = m.viewport.Update(msg)
-			return m, cmd
+	case key.Matches(msg, m.keys.LineUp):
+		// Up on empty input: recall previous prompts (shell-style
+		// history). When already navigating, step further back.
+		// Otherwise (input has text) the keypress falls through to the
+		// textarea for cursor movement.
+		if m.textarea.Value() == "" || m.historyCursor >= 0 {
+			m.recallPrompt(-1)
+			return m, nil
+		}
+	case key.Matches(msg, m.keys.LineDown):
+		// Down: step forward through history when navigating; otherwise
+		// fall through to textarea cursor movement (most common while
+		// composing).
+		if m.historyCursor >= 0 {
+			m.recallPrompt(+1)
+			return m, nil
 		}
 	case key.Matches(msg, m.keys.Submit):
 		// Submit Enter only fires a turn when idle. While streaming we
@@ -234,10 +250,40 @@ func (m *Model) refreshPalette() {
 	}
 }
 
+// recallPrompt steps the history cursor by delta and updates the
+// textarea. delta is -1 for "older" and +1 for "newer". The cursor's
+// final position is clamped to [-1, len(promptHistory)]; reaching
+// past-end clears the input and exits navigation mode.
+func (m *Model) recallPrompt(delta int) {
+	if len(m.promptHistory) == 0 {
+		return
+	}
+	switch {
+	case m.historyCursor < 0:
+		// Begin navigation from the most recent.
+		m.historyCursor = len(m.promptHistory) - 1
+	default:
+		m.historyCursor += delta
+	}
+	switch {
+	case m.historyCursor < 0:
+		m.historyCursor = 0
+	case m.historyCursor >= len(m.promptHistory):
+		// Past end → clear input and exit navigation.
+		m.historyCursor = -1
+		m.textarea.SetValue("")
+		m.refreshPalette()
+		return
+	}
+	m.textarea.SetValue(m.promptHistory[m.historyCursor])
+	m.refreshPalette()
+}
+
 // applyPaletteSelection acts on Enter while the palette is open. Slash
 // items: replace the input with the selected command and submit
-// immediately. File items: insert the @-path at the trigger position
-// and keep typing.
+// immediately. File items: insert the @-path at the trigger position;
+// directories drill in (palette stays open with the new filter), files
+// finalize and close the palette.
 func (m *Model) applyPaletteSelection() (tea.Model, tea.Cmd) {
 	if m.palette == nil || len(m.palette.items) == 0 {
 		return m, nil
@@ -249,15 +295,41 @@ func (m *Model) applyPaletteSelection() (tea.Model, tea.Cmd) {
 		m.textarea.SetValue(sel.Value)
 		return m.handleSubmit()
 	case paletteFile:
-		// Replace the partial @-token (from triggerPos to current end)
-		// with the selected value, plus a trailing space so the user
-		// can keep typing.
 		current := m.textarea.Value()
+		// Drilling into a dir: replace the partial @-token with the
+		// directory's value (which ends in "/") and let refreshPalette
+		// re-list files filtered by the new path.
+		if sel.IsDir {
+			newVal := current[:m.palette.triggerPos] + sel.Value
+			m.textarea.SetValue(newVal)
+			m.refreshPalette()
+			return m, nil
+		}
+		// File: insert + space + close palette.
 		newVal := current[:m.palette.triggerPos] + sel.Value + " "
 		m.textarea.SetValue(newVal)
-		// SetValue moves cursor to end; that's the right place.
 		m.palette = nil
 		return m, nil
+	}
+	return m, nil
+}
+
+// applyPaletteCompletion is the Tab variant: like Enter for files, but
+// for slash commands it inserts "<command> " (with trailing space) and
+// closes the palette without submitting, so the user can add args.
+func (m *Model) applyPaletteCompletion() (tea.Model, tea.Cmd) {
+	if m.palette == nil || len(m.palette.items) == 0 {
+		return m, nil
+	}
+	sel := m.palette.items[m.palette.cursor]
+	switch m.palette.kind {
+	case paletteSlash:
+		m.textarea.SetValue(sel.Value + " ")
+		m.palette = nil
+		return m, nil
+	case paletteFile:
+		// Same as Enter for files (drill-in for dirs; insert+close for files).
+		return m.applyPaletteSelection()
 	}
 	return m, nil
 }
@@ -311,11 +383,32 @@ func (m *Model) handleSubmit() (tea.Model, tea.Cmd) {
 	// in history (preserving the @ tokens) but pass the expanded form
 	// to the agent so it has the file contents inline.
 	m.history.Append(Message{Role: RoleUser, Text: input})
+	// Recall history: append the submitted prompt and reset the cursor.
+	m.promptHistory = append(m.promptHistory, input)
+	m.historyCursor = -1
 	expanded, refs, diags := expandAtRefs(input, readFileSafe(64*1024))
 	for _, d := range diags {
 		m.history.Append(Message{Role: RoleSystem, Text: d})
 	}
 	if len(refs) > 0 {
+		// Surface a warning for any @-ref that lands outside the
+		// configured path scope. We still inlined the file (the user
+		// typed the @-token explicitly) but they should be aware.
+		var outOfScope []string
+		if m.scope != nil {
+			for _, r := range refs {
+				if in, _ := m.scope.Contains(r); !in {
+					outOfScope = append(outOfScope, r)
+				}
+			}
+		}
+		if len(outOfScope) > 0 {
+			m.history.Append(Message{
+				Role: RoleSystem,
+				Text: "⚠ Inlined out-of-scope file(s): " + strings.Join(outOfScope, ", ") +
+					" — these were sent to the model. Add them to .agents/config.json path_scope.allow if you want this without the warning.",
+			})
+		}
 		m.history.Append(Message{Role: RoleSystem, Text: "Inlined file references: " + strings.Join(refs, ", ")})
 	}
 	m.textarea.Reset()

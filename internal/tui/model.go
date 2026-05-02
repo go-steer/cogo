@@ -66,10 +66,23 @@ type Model struct {
 	// @-file picker; defaults to the cwd at NewModel time.
 	projectRoot string
 
+	// scope is consulted only to warn about @-file references that
+	// point outside the in-scope roots. The user's keystroke is
+	// authoritative consent (we still inline the file), but a system
+	// message keeps them aware so they don't paste private files into
+	// the model context by accident. Nil-safe.
+	scope *permissions.PathScope
+
 	// Pending permission request from the gate. Non-nil while the
 	// permission modal is up; the user's keypress writes back to
 	// pendingConfirm.Out and clears this field.
 	pendingConfirm *confirmReqMsg
+
+	// Prompt history: the user's submitted prompts in submission
+	// order. cursor is the active recall position when navigating
+	// (-1 = not navigating, len(promptHistory) = past-end / empty input).
+	promptHistory []string
+	historyCursor int
 
 	// True when the user just hit Ctrl+C while idle once. Second press exits.
 	pendingExit bool
@@ -118,6 +131,7 @@ func NewModel(cfg *config.Config, a *agent.Agent, mdStyle string) *Model {
 		state:               StateIdle,
 		currentAssistantIdx: -1,
 		projectRoot:         cwd,
+		historyCursor:       -1,
 	}
 	return m
 }
