@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Copyright 2026 The Cogo Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+# Run the unit test suite with -race + atomic coverage.
+#
+# Outputs coverage.out at the repo root for the CI summary step.
+# Vertex E2E tests are gated on COGO_E2E=1 + auth env vars and skip
+# automatically when those aren't set.
+set -euo pipefail
+. "$(dirname "$0")/common.sh"
+cd "$(repo_root)"
+
+exec go test -race -timeout 5m \
+  -coverprofile=coverage.out -covermode=atomic \
+  ./...

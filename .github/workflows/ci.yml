@@ -1,0 +1,125 @@
+# Copyright 2026 The Cogo Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main]
+
+# Cancel in-progress runs when a new commit lands on the same branch
+# so we don't queue stale tests.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  GO_VERSION: '1.26'
+
+# Each job below is a thin wrapper over a script under
+# dev/ci/presubmits/. The same script is what `dev/tools/ci` runs
+# locally, so a green local run is the same green run as remote CI.
+# Keep the wiring boring — logic lives in dev/tools/, not in YAML.
+#
+# `if: !skip-dev-pr` on every job: when a PR is opened from `dev` to
+# `main`, every job is skipped because the same HEAD SHA already has
+# green status checks from the `dev` push. Status checks are SHA-scoped,
+# so branch protection on `main` (which requires `test` / `lint` /
+# `tidy` / `vuln`) is satisfied by the checks already attached to that
+# SHA. PRs from feature branches or forks still run CI normally.
+
+jobs:
+  test:
+    name: test
+    if: github.event_name != 'pull_request' || github.head_ref != 'dev'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          check-latest: true
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-${{ env.GO_VERSION }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-${{ env.GO_VERSION }}-
+      - run: go mod download
+      - name: Vet
+        run: dev/ci/presubmits/vet
+      - name: Build
+        run: dev/ci/presubmits/build
+      - name: Test
+        # Vertex e2e tests are gated on COGO_E2E=1 + auth env vars, so
+        # they naturally skip in CI — no GCP secrets needed.
+        run: dev/ci/presubmits/test-unit
+      - name: Coverage summary
+        run: |
+          echo "## Coverage" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          go tool cover -func=coverage.out | tee -a "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.out
+          retention-days: 14
+          if-no-files-found: error
+
+  lint:
+    name: lint
+    if: github.event_name != 'pull_request' || github.head_ref != 'dev'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          check-latest: true
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+            ~/.cache/golangci-lint
+          key: ${{ runner.os }}-lint-${{ env.GO_VERSION }}-${{ hashFiles('**/go.sum', 'dev/tools/.golangci.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-lint-${{ env.GO_VERSION }}-
+      - name: Format
+        run: dev/ci/presubmits/verify-go-format
+      - name: golangci-lint
+        run: dev/ci/presubmits/lint-go
+
+  tidy:
+    name: go mod tidy is clean
+    if: github.event_name != 'pull_request' || github.head_ref != 'dev'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          check-latest: true
+      - name: Verify tidy
+        run: dev/ci/presubmits/verify-mod-tidy
+
+  vuln:
+    name: govulncheck
+    if: github.event_name != 'pull_request' || github.head_ref != 'dev'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          check-latest: true
+      - name: Vuln scan
+        run: dev/ci/presubmits/verify-vuln

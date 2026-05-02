@@ -1,0 +1,163 @@
+# Copyright 2026 The Cogo Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+version: 2
+
+project_name: cogo
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: cogo
+    main: ./cmd/cogo
+    binary: cogo
+    env:
+      # Static binary so the same artifact runs on glibc, musl, and
+      # distroless without dynamic-link surprises.
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s
+      - -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    mod_timestamp: '{{ .CommitTimestamp }}'
+
+archives:
+  - name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    files:
+      - LICENSE
+      - README.md
+      - AGENTS.md
+      - docs/*
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  version_template: '{{ incpatch .Version }}-snapshot'
+
+# Container images on ghcr.io. Per-arch images first, then a single
+# multi-arch manifest tag so users can `docker pull ghcr.io/go-steer/cogo:VERSION`
+# transparently on amd64 + arm64.
+dockers:
+  - id: cogo-linux-amd64
+    goos: linux
+    goarch: amd64
+    use: buildx
+    dockerfile: Dockerfile
+    image_templates:
+      - "ghcr.io/go-steer/cogo:{{ .Version }}-amd64"
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.description=A terminal-native agentic CLI for Go developers."
+      - "--label=org.opencontainers.image.url=https://github.com/go-steer/cogo"
+      - "--label=org.opencontainers.image.source=https://github.com/go-steer/cogo"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.created={{ .Date }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+      - "--label=org.opencontainers.image.licenses=Apache-2.0"
+
+  - id: cogo-linux-arm64
+    goos: linux
+    goarch: arm64
+    use: buildx
+    dockerfile: Dockerfile
+    image_templates:
+      - "ghcr.io/go-steer/cogo:{{ .Version }}-arm64"
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.description=A terminal-native agentic CLI for Go developers."
+      - "--label=org.opencontainers.image.url=https://github.com/go-steer/cogo"
+      - "--label=org.opencontainers.image.source=https://github.com/go-steer/cogo"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.created={{ .Date }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+      - "--label=org.opencontainers.image.licenses=Apache-2.0"
+
+docker_manifests:
+  - name_template: "ghcr.io/go-steer/cogo:{{ .Version }}"
+    image_templates:
+      - "ghcr.io/go-steer/cogo:{{ .Version }}-amd64"
+      - "ghcr.io/go-steer/cogo:{{ .Version }}-arm64"
+  - name_template: "ghcr.io/go-steer/cogo:latest"
+    image_templates:
+      - "ghcr.io/go-steer/cogo:{{ .Version }}-amd64"
+      - "ghcr.io/go-steer/cogo:{{ .Version }}-arm64"
+
+# Homebrew tap. Users install via:
+#   brew install go-steer/cogo/cogo
+# (the formula gets written into go-steer/homebrew-cogo automatically).
+brews:
+  - name: cogo
+    repository:
+      owner: go-steer
+      name: homebrew-cogo
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    homepage: "https://github.com/go-steer/cogo"
+    description: "A terminal-native agentic CLI for Go developers."
+    license: "Apache-2.0"
+    install: |
+      bin.install "cogo"
+    test: |
+      assert_match "cogo", shell_output("#{bin}/cogo --version")
+    commit_author:
+      name: cogo-release-bot
+      email: noreply@github.com
+    commit_msg_template: "cogo {{ .Tag }}"
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore: '
+      - '^ci:'
+      - 'typo'
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\(.+\))??!?:.+$'
+      order: 0
+    - title: Bug fixes
+      regexp: '^.*?fix(\(.+\))??!?:.+$'
+      order: 1
+    - title: Performance
+      regexp: '^.*?perf(\(.+\))??!?:.+$'
+      order: 2
+    - title: Other
+      order: 999
+
+release:
+  github:
+    owner: go-steer
+    name: cogo
+  prerelease: auto
+  header: |
+    ## cogo {{ .Tag }}
+
+    Install:
+
+      ```sh
+      # Homebrew
+      brew install go-steer/cogo/cogo
+
+      # Docker
+      docker pull ghcr.io/go-steer/cogo:{{ .Version }}
+
+      # Binary download — see the assets attached below.
+      ```

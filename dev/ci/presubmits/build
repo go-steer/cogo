@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Copyright 2026 The Cogo Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+# CI delegator: builds every package via dev/tools/build.
+set -euo pipefail
+exec "$(dirname "$0")/../../tools/build" "$@"

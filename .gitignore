@@ -28,5 +28,25 @@ go.work.sum
 .env
 
 # Editor/IDE
-# .idea/
-# .vscode/
+.idea/
+.vscode/
+.DS_Store
+
+# Project-specific binaries (built from ./cmd/...)
+/cogo
+
+# Goreleaser output
+/dist/
+
+# Per-user Claude Code settings (project-shared lives in .claude/settings.json)
+.claude/settings.local.json
+
+# Per-user .agents/ state (cogo init writes a nested .gitignore here too)
+/.agents/sessions/
+/.agents/logs/
+
+# Local environment overrides
+.env.local
+
+# Personal working notes — kept on disk but not in version control.
+TODO.md

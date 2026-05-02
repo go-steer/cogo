@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Copyright 2026 The Cogo Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+# Compile every package. Catches packages that don't build but have no tests.
+set -euo pipefail
+. "$(dirname "$0")/common.sh"
+cd "$(repo_root)"
+exec go build ./...

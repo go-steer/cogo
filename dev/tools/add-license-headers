@@ -1,0 +1,132 @@
+#!/usr/bin/env python3
+# Copyright 2026 The Cogo Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+"""Bulk-add SPDX + copyright headers to Cogo's source files.
+
+Idempotent: checks each file for an existing SPDX-License-Identifier
+line near the top before inserting. Re-run safely after adding new
+files.
+
+Scope (matches dev/README.md):
+- Go source under cmd/ and internal/
+- Shell scripts under dev/tools/ and dev/ci/presubmits/
+- YAML: .github/workflows/*.yml, .goreleaser.yaml, dev/tools/.golangci.yml
+
+For Go files, golangci-lint's `goheader` linter enforces the header on
+every CI run; this script is the bulk-add helper for the file types
+that aren't lint-checked (shell + yaml).
+"""
+import os
+import sys
+from pathlib import Path
+
+# Repo root: parent of dev/tools/ — find it relative to this script
+# so the tool works regardless of cwd.
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+
+GO_HEADER = (
+    "// Copyright 2026 The Cogo Authors.\n"
+    "// SPDX-License-Identifier: Apache-2.0\n"
+    "\n"
+)
+HASH_HEADER = (
+    "# Copyright 2026 The Cogo Authors.\n"
+    "# SPDX-License-Identifier: Apache-2.0\n"
+)
+
+
+def has_spdx(text: str) -> bool:
+    # Look in the first 500 bytes — header is always near the top.
+    return "SPDX-License-Identifier" in text[:500]
+
+
+def fix_go(path: Path) -> bool:
+    text = path.read_text()
+    if has_spdx(text):
+        return False
+    path.write_text(GO_HEADER + text)
+    return True
+
+
+def fix_shell(path: Path) -> bool:
+    text = path.read_text()
+    if has_spdx(text):
+        return False
+    if text.startswith("#!"):
+        # Insert after shebang. Add a blank line between the SPDX block
+        # and any following comment so the file's existing description
+        # stays visually distinct from the legal preamble.
+        nl = text.find("\n") + 1
+        rest = text[nl:]
+        sep = "\n" if rest.startswith("#") else ""
+        new = text[:nl] + HASH_HEADER + sep + rest
+    else:
+        new = HASH_HEADER + "\n" + text
+    path.write_text(new)
+    return True
+
+
+def fix_yaml(path: Path) -> bool:
+    text = path.read_text()
+    if has_spdx(text):
+        return False
+    path.write_text(HASH_HEADER + "\n" + text)
+    return True
+
+
+def is_executable_or_sh(p: Path) -> bool:
+    return p.suffix == ".sh" or os.access(p, os.X_OK)
+
+
+def main() -> None:
+    counts = {"go": 0, "sh": 0, "yaml": 0}
+
+    # Go: every .go under cmd/ + internal/ (skip vendored paths).
+    for top in ("cmd", "internal"):
+        for path in (REPO_ROOT / top).rglob("*.go"):
+            if "/vendor/" in str(path):
+                continue
+            if fix_go(path):
+                counts["go"] += 1
+                print(f"go:   {path.relative_to(REPO_ROOT)}")
+
+    # Shell: dev/tools + dev/ci/presubmits. Skip helper data files.
+    for d in (REPO_ROOT / "dev/tools", REPO_ROOT / "dev/ci/presubmits"):
+        if not d.exists():
+            continue
+        for path in d.iterdir():
+            if not path.is_file():
+                continue
+            if path.suffix in (".yml", ".yaml", ".md"):
+                continue
+            if path.name == "common.sh" or is_executable_or_sh(path):
+                if fix_shell(path):
+                    counts["sh"] += 1
+                    print(f"sh:   {path.relative_to(REPO_ROOT)}")
+
+    # YAML: workflows, goreleaser config, golangci-lint config.
+    yaml_files = [
+        *list((REPO_ROOT / ".github/workflows").glob("*.yml")),
+        REPO_ROOT / ".goreleaser.yaml",
+        REPO_ROOT / "dev/tools/.golangci.yml",
+    ]
+    for path in yaml_files:
+        if not path.exists():
+            continue
+        if fix_yaml(path):
+            counts["yaml"] += 1
+            print(f"yaml: {path.relative_to(REPO_ROOT)}")
+
+    total = sum(counts.values())
+    if total == 0:
+        print("All files already carry the SPDX header — nothing to do.")
+    else:
+        print()
+        print(
+            f"Added headers — go: {counts['go']}, sh: {counts['sh']}, yaml: {counts['yaml']}"
+        )
+
+
+if __name__ == "__main__":
+    main()

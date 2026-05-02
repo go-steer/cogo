@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Copyright 2026 The Cogo Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+# Fail when any Go file isn't gofmt -s + goimports clean.
+#
+# Read-only — never modifies sources. Run dev/tools/fix-go-format to
+# auto-fix anything reported here.
+set -euo pipefail
+. "$(dirname "$0")/common.sh"
+cd "$(repo_root)"
+
+ensure_tool goimports golang.org/x/tools/cmd/goimports@latest
+
+bad_fmt=$(gofmt -s -l .)
+bad_imports=$(goimports -l -local github.com/go-steer/cogo .)
+
+if [[ -n "$bad_fmt" || -n "$bad_imports" ]]; then
+  if [[ -n "$bad_fmt" ]]; then
+    echo "gofmt -s would change these files:" >&2
+    echo "$bad_fmt" >&2
+  fi
+  if [[ -n "$bad_imports" ]]; then
+    echo "goimports would change these files:" >&2
+    echo "$bad_imports" >&2
+  fi
+  echo >&2
+  echo "Run dev/tools/fix-go-format to auto-fix." >&2
+  exit 1
+fi
