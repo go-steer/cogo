@@ -139,7 +139,6 @@ Each slice gets its own detailed plan written **at the start of that slice** (in
 - `internal/telemetry/` — OTEL setup that calls `providers.SetGlobalOtelProviders()` (per spike finding); env-driven exporter selection (`none` / `console` / `otlp`); `--otel=console` flag.
 - `internal/session/` — transcript writer; persists `.agents/sessions/<timestamp>.json` on `/quit` and Ctrl+C; atomic temp + rename.
 - `internal/log/` — `--debug` flips slog handler to a JSONL handler writing under `.agents/logs/<timestamp>.jsonl`.
-- **Schema-driven MCP elicitation modal** — Slice 4b stubs `ElicitationHandler` to decline-with-notice. Build a Bubble Tea form that renders the request's JSON Schema (text inputs for strings, lists for enums, etc.), wired through a channel like the permission flow.
 - Top-level:
   - `.goreleaser.yaml` — cross-platform builds (linux/darwin × amd64/arm64); checksums; archive layout.
   - `.github/workflows/ci.yml` — `go test ./...` on push/PR across a small Go matrix.

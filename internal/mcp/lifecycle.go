@@ -74,17 +74,22 @@ func (s *Server) Close() {
 
 // Build reads .agents/mcp.json and starts every declared server in
 // parallel. The send callback is plumbed into each server's elicitation
-// handler so Cogo can surface elicitation requests in the right place
-// (TUI system message vs headless stderr).
+// handler (when no interactive elicitor is provided) so Cogo can
+// surface elicitation requests in the right place (TUI system message
+// vs headless stderr).
 //
 // gate (optional) gates each MCP tool call through Cogo's permission
 // system so MCP tools are subject to the same ask/allow/yolo rules
-// as built-in tools. Pass nil to skip gating (Slice 4b shipped this
-// way; 5b adds the wrap).
+// as built-in tools. Pass nil to skip gating.
+//
+// elicitor (optional) is the interactive bridge for elicitation
+// requests. The TUI passes a function that opens a modal and blocks
+// on the user's answer; headless callers leave it nil and fall back
+// to DeclineHandler.
 //
 // Servers that fail to start come back with Status==StatusError so
 // they're visible in /mcp without breaking the rest of the agent.
-func Build(ctx context.Context, agentsDir string, send func(string), gate *permissions.Gate) ([]*Server, []tool.Toolset, error) {
+func Build(ctx context.Context, agentsDir string, send func(string), gate *permissions.Gate, elicitor ElicitorFn) ([]*Server, []tool.Toolset, error) {
 	cfg, err := Load(agentsDir)
 	if err != nil {
 		return nil, nil, err
@@ -100,7 +105,7 @@ func Build(ctx context.Context, agentsDir string, send func(string), gate *permi
 		wg.Add(1)
 		go func(name string, spec ServerSpec) {
 			defer wg.Done()
-			srv := startOne(ctx, name, spec, send, gate)
+			srv := startOne(ctx, name, spec, send, gate, elicitor)
 			mu.Lock()
 			out = append(out, srv)
 			mu.Unlock()
@@ -122,7 +127,7 @@ func Build(ctx context.Context, agentsDir string, send func(string), gate *permi
 // startOne instantiates one server. Errors are stored on the Server
 // rather than returned so a single broken server doesn't prevent the
 // rest of the registry from coming up.
-func startOne(ctx context.Context, name string, spec ServerSpec, send func(string), gate *permissions.Gate) *Server {
+func startOne(ctx context.Context, name string, spec ServerSpec, send func(string), gate *permissions.Gate, elicitor ElicitorFn) *Server {
 	srv := &Server{Name: name}
 
 	transport, cmd, err := transportFor(spec)
@@ -135,7 +140,7 @@ func startOne(ctx context.Context, name string, spec ServerSpec, send func(strin
 
 	client := mcpsdk.NewClient(
 		&mcpsdk.Implementation{Name: "cogo", Version: "0.1.0"},
-		&mcpsdk.ClientOptions{ElicitationHandler: DeclineHandler(name, send)},
+		&mcpsdk.ClientOptions{ElicitationHandler: handlerFor(name, send, elicitor)},
 	)
 	ts, err := mcptoolset.New(mcptoolset.Config{
 		Client:    client,

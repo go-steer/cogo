@@ -1,10 +1,23 @@
 package tui
 
+import (
+	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
+)
+
 // Typed tea.Msg events for the TUI.
 //
 // All custom message types live here so the Update function has one
 // switch-target to refer to. Bubble Tea's tea.Msg is interface{}; we
 // use small struct types for type safety.
+
+// elicitReqMsg is sent by mcp/elicitation bridge when an MCP server
+// asks the user for input. Carries the parsed request plus a buffered
+// reply channel that the TUI writes the user's response to.
+type elicitReqMsg struct {
+	ServerName string
+	Req        *mcpsdk.ElicitRequest
+	Out        chan *mcpsdk.ElicitResult
+}
 
 // streamChunkMsg is emitted by the agent goroutine for each Partial
 // event. Text is the raw token chunk from the model.

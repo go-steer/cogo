@@ -83,6 +83,7 @@ func Run(ctx context.Context, cfg *config.Config, agentsDir string) (int, error)
 	// because their handlers close over the gate.
 	m := NewModel(cfg, nil, mdStyle)
 	prompter := NewPrompter(nil) // wired after p is built
+	elicitor := newTUIElicitor()  // wired after p is built
 
 	gate, err := permissions.FromConfig(cfg, cwd, cogoHome, prompter)
 	if err != nil {
@@ -111,7 +112,7 @@ func Run(ctx context.Context, cfg *config.Config, agentsDir string) (int, error)
 	var earlyNotes []string
 	send := func(s string) { earlyNotes = append(earlyNotes, s) }
 
-	mcpServers, mcpToolsets, err := mcp.Build(ctx, agentsDir, send, gate)
+	mcpServers, mcpToolsets, err := mcp.Build(ctx, agentsDir, send, gate, elicitor.Elicit)
 	if err != nil {
 		earlyNotes = append(earlyNotes, "MCP load: "+err.Error())
 	}
@@ -183,7 +184,7 @@ func Run(ctx context.Context, cfg *config.Config, agentsDir string) (int, error)
 			for _, old := range m.mcpServers {
 				old.Close()
 			}
-			newMCPServers, newMCPToolsets, err := mcp.Build(ctx, agentsDir, send, gate)
+			newMCPServers, newMCPToolsets, err := mcp.Build(ctx, agentsDir, send, gate, elicitor.Elicit)
 			if err != nil {
 				return reloadResult{}, fmt.Errorf("mcp: %w", err)
 			}
@@ -234,6 +235,7 @@ func Run(ctx context.Context, cfg *config.Config, agentsDir string) (int, error)
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	m.SetProgram(p)
 	prompter.(*tuiPrompter).send = p
+	elicitor.attach(p)
 
 	finalModel, err := p.Run()
 	if err != nil {

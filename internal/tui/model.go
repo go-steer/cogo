@@ -116,6 +116,11 @@ type Model struct {
 	// pendingConfirm.Out and clears this field.
 	pendingConfirm *confirmReqMsg
 
+	// Pending MCP elicitation request. Non-nil while the elicit modal
+	// is up; key handling intercepts Tab / Enter / Esc / printable
+	// keys until the user replies.
+	pendingElicit *elicitState
+
 	// Prompt history: the user's submitted prompts in submission
 	// order. cursor is the active recall position when navigating
 	// (-1 = not navigating, len(promptHistory) = past-end / empty input).

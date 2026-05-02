@@ -7,7 +7,9 @@ import (
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/spinner"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/go-steer/cogo/internal/permissions"
 	"github.com/go-steer/cogo/internal/usage"
@@ -19,6 +21,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		return m.handleResize(msg)
 	case tea.KeyMsg:
+		// Elicit modal preempts everything (it can carry a free-text
+		// input that would otherwise eat slash commands).
+		if m.pendingElicit != nil {
+			return m.handleElicitKey(msg)
+		}
 		// Permission modal preempts every other key handler when up.
 		if m.pendingConfirm != nil {
 			return m.handleConfirmKey(msg)
@@ -38,6 +45,33 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.pendingConfirm = &msg
 		return m, nil
+	case elicitReqMsg:
+		// Build render state. If the server's request is malformed
+		// (nested schemas, unsupported types) we auto-decline rather
+		// than render a possibly-unsafe form.
+		if m.pendingElicit != nil {
+			// Already a modal up; decline the new one to avoid
+			// stacking. Server can retry.
+			select {
+			case msg.Out <- &mcpsdk.ElicitResult{Action: "decline"}:
+			default:
+			}
+			return m, nil
+		}
+		st, err := newElicitState(msg.ServerName, msg.Req, msg.Out)
+		if err != nil {
+			select {
+			case msg.Out <- &mcpsdk.ElicitResult{Action: "decline"}:
+			default:
+			}
+			m.history.Append(Message{Role: RoleSystem, Text: fmt.Sprintf(
+				"MCP server %q sent an unsupported elicitation request (%s); declined.",
+				msg.ServerName, err.Error())})
+			m.refreshViewport()
+			return m, nil
+		}
+		m.pendingElicit = st
+		return m, textinput.Blink
 	case streamChunkMsg:
 		return m.handleStreamChunk(msg)
 	case usageMsg:
@@ -106,6 +140,120 @@ func (m *Model) handleConfirmKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func confirmEcho(req permissions.PromptRequest, d permissions.Decision) string {
 	return "Permission " + d.String() + ": " + req.ToolName + " — " + req.Detail
+}
+
+// handleElicitKey processes a keystroke while the MCP elicitation modal
+// is up. The state machine:
+//
+//   - URL mode:  o = open in browser, a = accept (server treats this as
+//     "I completed the flow"), n = decline, esc = cancel.
+//   - Form mode: tab/down = next field, shift+tab/up = previous, enter
+//     submits (validates first), esc = cancel, n = decline, and any
+//     other key is forwarded to the active textinput or used to cycle
+//     enum/boolean choices (left/right + space).
+//
+// The reply happens via st.reply(), which writes onto the buffered Out
+// channel the elicitor goroutine is blocked on. After replying we clear
+// pendingElicit so normal key handling resumes.
+func (m *Model) handleElicitKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	st := m.pendingElicit
+	if st == nil {
+		return m, nil
+	}
+	switch st.Mode {
+	case elicitURL:
+		return m.handleElicitURLKey(st, msg)
+	default:
+		return m.handleElicitFormKey(st, msg)
+	}
+}
+
+func (m *Model) handleElicitURLKey(st *elicitState, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "o":
+		// Best-effort browser launch; failure is silent (the URL is
+		// still on screen for the user to copy).
+		openURL(context.Background(), st.URL)
+		return m, nil
+	case "a", "enter":
+		st.reply("accept", nil)
+		m.history.Append(Message{Role: RoleSystem, Text: fmt.Sprintf(
+			"MCP %q elicitation: accepted (URL flow).", st.ServerName)})
+		m.pendingElicit = nil
+		m.refreshViewport()
+		return m, nil
+	case "n":
+		st.reply("decline", nil)
+		m.history.Append(Message{Role: RoleSystem, Text: fmt.Sprintf(
+			"MCP %q elicitation: declined.", st.ServerName)})
+		m.pendingElicit = nil
+		m.refreshViewport()
+		return m, nil
+	case "esc":
+		st.reply("cancel", nil)
+		m.history.Append(Message{Role: RoleSystem, Text: fmt.Sprintf(
+			"MCP %q elicitation: cancelled.", st.ServerName)})
+		m.pendingElicit = nil
+		m.refreshViewport()
+		return m, nil
+	}
+	return m, nil
+}
+
+func (m *Model) handleElicitFormKey(st *elicitState, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		st.reply("cancel", nil)
+		m.history.Append(Message{Role: RoleSystem, Text: fmt.Sprintf(
+			"MCP %q elicitation: cancelled.", st.ServerName)})
+		m.pendingElicit = nil
+		m.refreshViewport()
+		return m, nil
+	case "tab", "down":
+		st.nextField()
+		return m, nil
+	case "shift+tab", "up":
+		st.prevField()
+		return m, nil
+	case "enter":
+		content, errMsg := st.validate()
+		if errMsg != "" {
+			st.Err = errMsg
+			return m, nil
+		}
+		st.reply("accept", content)
+		m.history.Append(Message{Role: RoleSystem, Text: fmt.Sprintf(
+			"MCP %q elicitation: accepted.", st.ServerName)})
+		m.pendingElicit = nil
+		m.refreshViewport()
+		return m, nil
+	case "left":
+		// On enum/boolean fields the arrow keys cycle the choice. On
+		// text fields they fall through to the textinput so the cursor
+		// can move.
+		if !st.activeUsesInput() {
+			st.cycleChoice(-1)
+			return m, nil
+		}
+	case "right":
+		if !st.activeUsesInput() {
+			st.cycleChoice(+1)
+			return m, nil
+		}
+	case " ", "space":
+		// Spacebar toggles enum/boolean choice forward — handy on
+		// boolean (true ↔ false) and lets enum users avoid hunting for
+		// the arrow keys.
+		if !st.activeUsesInput() {
+			st.cycleChoice(+1)
+			return m, nil
+		}
+	}
+	// Default: forward the key to the active textinput (no-op for
+	// enum/boolean fields). Any side-effect cmd (cursor blink) bubbles
+	// up so it animates while the modal is open.
+	cmd := st.updateActiveInput(msg)
+	return m, cmd
 }
 
 func (m *Model) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {

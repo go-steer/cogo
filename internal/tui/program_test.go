@@ -2,6 +2,7 @@ package tui
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/exp/teatest"
+	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/go-steer/cogo/internal/agent"
 	"github.com/go-steer/cogo/internal/config"
@@ -528,6 +530,169 @@ func TestProgram_PermissionModalAlwaysCallsHook(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Errorf("AlwaysAllow hook did not fire within 2s")
 	}
+
+	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
+	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(2*time.Second))
+}
+
+func TestProgram_ElicitFormAccept(t *testing.T) {
+	t.Parallel()
+	_, tm := newTestModelExposed(t, nil)
+
+	// Two-field form: a string and a boolean.
+	rawSchema, _ := json.Marshal(map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"name":  map[string]any{"type": "string", "description": "what's your name"},
+			"agree": map[string]any{"type": "boolean"},
+		},
+		"required": []any{"name"},
+	})
+	out := make(chan *mcpsdk.ElicitResult, 1)
+	tm.Send(elicitReqMsg{
+		ServerName: "github",
+		Req: &mcpsdk.ElicitRequest{
+			Params: &mcpsdk.ElicitParams{
+				Message:         "fill in",
+				RequestedSchema: json.RawMessage(rawSchema),
+			},
+		},
+		Out: out,
+	})
+	teatest.WaitFor(t, tm.Output(), func(o []byte) bool {
+		return bytes.Contains(o, []byte("MCP github")) &&
+			bytes.Contains(o, []byte("name")) && bytes.Contains(o, []byte("agree"))
+	}, teatest.WithDuration(2*time.Second))
+
+	// Fields are alpha-sorted: agree (boolean, active), name. Tab moves
+	// to "name" (a string textinput), then we type a value, then Enter
+	// submits.
+	tm.Send(tea.KeyMsg{Type: tea.KeyTab})
+	tm.Type("Ada")
+	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
+
+	select {
+	case res := <-out:
+		if res.Action != "accept" {
+			t.Errorf("Action = %q, want accept", res.Action)
+		}
+		if res.Content["name"] != "Ada" {
+			t.Errorf("Content[name] = %v, want Ada", res.Content["name"])
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("no reply within 2s")
+	}
+
+	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
+	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(2*time.Second))
+}
+
+func TestProgram_ElicitFormCancel(t *testing.T) {
+	t.Parallel()
+	_, tm := newTestModelExposed(t, nil)
+
+	rawSchema, _ := json.Marshal(map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"name": map[string]any{"type": "string"},
+		},
+	})
+	out := make(chan *mcpsdk.ElicitResult, 1)
+	tm.Send(elicitReqMsg{
+		ServerName: "svc",
+		Req: &mcpsdk.ElicitRequest{
+			Params: &mcpsdk.ElicitParams{RequestedSchema: json.RawMessage(rawSchema)},
+		},
+		Out: out,
+	})
+	teatest.WaitFor(t, tm.Output(), func(o []byte) bool {
+		return bytes.Contains(o, []byte("MCP svc"))
+	}, teatest.WithDuration(2*time.Second))
+
+	// Esc should cancel.
+	tm.Send(tea.KeyMsg{Type: tea.KeyEsc})
+	select {
+	case res := <-out:
+		if res.Action != "cancel" {
+			t.Errorf("Action = %q, want cancel", res.Action)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("no reply within 2s")
+	}
+
+	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
+	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(2*time.Second))
+}
+
+func TestProgram_ElicitURLAccept(t *testing.T) {
+	t.Parallel()
+	_, tm := newTestModelExposed(t, nil)
+
+	out := make(chan *mcpsdk.ElicitResult, 1)
+	tm.Send(elicitReqMsg{
+		ServerName: "auth",
+		Req: &mcpsdk.ElicitRequest{
+			Params: &mcpsdk.ElicitParams{
+				Mode:    "url",
+				Message: "open this in a browser",
+				URL:     "https://example.com/login",
+			},
+		},
+		Out: out,
+	})
+	teatest.WaitFor(t, tm.Output(), func(o []byte) bool {
+		return bytes.Contains(o, []byte("https://example.com/login"))
+	}, teatest.WithDuration(2*time.Second))
+
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+	select {
+	case res := <-out:
+		if res.Action != "accept" {
+			t.Errorf("Action = %q, want accept", res.Action)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("no reply within 2s")
+	}
+
+	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
+	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(2*time.Second))
+}
+
+func TestProgram_ElicitInvalidSchemaDeclines(t *testing.T) {
+	t.Parallel()
+	_, tm := newTestModelExposed(t, nil)
+
+	// Nested-object schema is rejected by parseSchema → auto-decline.
+	rawSchema, _ := json.Marshal(map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"nested": map[string]any{"type": "object"},
+		},
+	})
+	out := make(chan *mcpsdk.ElicitResult, 1)
+	tm.Send(elicitReqMsg{
+		ServerName: "bad",
+		Req: &mcpsdk.ElicitRequest{
+			Params: &mcpsdk.ElicitParams{RequestedSchema: json.RawMessage(rawSchema)},
+		},
+		Out: out,
+	})
+
+	select {
+	case res := <-out:
+		if res.Action != "decline" {
+			t.Errorf("Action = %q, want decline", res.Action)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("no reply within 2s")
+	}
+	teatest.WaitFor(t, tm.Output(), func(o []byte) bool {
+		return bytes.Contains(o, []byte("unsupported elicitation"))
+	}, teatest.WithDuration(2*time.Second))
 
 	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
 	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})

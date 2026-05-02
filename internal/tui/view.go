@@ -31,6 +31,8 @@ func (m *Model) View() string {
 	body := m.viewport.View()
 	var input string
 	switch {
+	case m.pendingElicit != nil:
+		input = m.renderElicitModal()
 	case m.pendingConfirm != nil:
 		input = m.renderConfirmModal()
 	case m.modelPicker != nil:
@@ -124,6 +126,81 @@ func (m *Model) renderModelPicker() string {
 	return m.styles.InputBorder.Render(header + "\n" + body)
 }
 
+// renderElicitModal draws the MCP elicitation modal. URL mode shows
+// the URL prominently with open/accept/decline keys. Form mode lists
+// each field with the active one highlighted, plus a key legend and
+// any validation error.
+func (m *Model) renderElicitModal() string {
+	st := m.pendingElicit
+	if st == nil {
+		return ""
+	}
+	header := m.styles.Confirm.Render(fmt.Sprintf("MCP %s — input requested", st.ServerName))
+	if st.Mode == elicitURL {
+		body := header + "\n"
+		if st.Message != "" {
+			body += m.styles.System.Render(st.Message) + "\n"
+		}
+		body += m.styles.HeaderAccent.Render(st.URL) + "\n" +
+			m.styles.Footer.Render("[o] open in browser   [a/enter] accept   [n] decline   [esc] cancel")
+		return m.styles.InputBorder.Render(body)
+	}
+
+	lines := []string{header}
+	if st.Message != "" {
+		lines = append(lines, m.styles.System.Render(st.Message))
+	}
+	for i, f := range st.Fields {
+		marker := "  "
+		if i == st.Active {
+			marker = "▸ "
+		}
+		label := marker + f.Name
+		if f.Required {
+			label += " *"
+		}
+		if f.Description != "" {
+			label += "  " + m.styles.Footer.Render("("+f.Description+")")
+		}
+		var value string
+		switch f.Kind {
+		case fieldString, fieldNumber, fieldInteger:
+			value = f.input.View()
+		case fieldEnum, fieldBoolean:
+			value = renderChoiceCycler(f, i == st.Active, m.styles)
+		}
+		row := label + "\n    " + value
+		if i == st.Active {
+			lines = append(lines, m.styles.HeaderAccent.Render(row))
+		} else {
+			lines = append(lines, m.styles.Footer.Render(row))
+		}
+	}
+	if st.Err != "" {
+		lines = append(lines, m.styles.Error.Render("⚠ "+st.Err))
+	}
+	lines = append(lines, m.styles.Footer.Render(
+		"[tab/↓] next   [shift+tab/↑] prev   [enter] submit   [esc] cancel"))
+	return m.styles.InputBorder.Render(strings.Join(lines, "\n"))
+}
+
+// renderChoiceCycler shows the enum/boolean choice as the current
+// value flanked by '<' and '>' to hint at left/right cycling.
+func renderChoiceCycler(f elicitField, active bool, st Styles) string {
+	if len(f.Choices) == 0 {
+		return "(no choices)"
+	}
+	cur := f.choice
+	if cur < 0 || cur >= len(f.Choices) {
+		cur = 0
+	}
+	val := f.Choices[cur]
+	if active {
+		return st.HeaderAccent.Render("‹ " + val + " ›")
+	}
+	return val
+}
+
 // renderConfirmModal draws the permission request modal in place of
 // the input area. Kept simple in Slice 3: a bordered box with the
 // request detail and the four-key prompt.
@@ -202,6 +279,8 @@ func (m *Model) renderInput() string {
 
 func (m *Model) renderFooter() string {
 	switch {
+	case m.pendingElicit != nil:
+		return m.styles.Footer.Render("MCP elicitation in progress — see the modal above")
 	case m.pendingConfirm != nil:
 		return m.styles.Footer.Render("Permission required — choose one of the keys above")
 	case m.state == StateStreaming:
