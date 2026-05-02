@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-steer/cogo/internal/agent"
 	"github.com/go-steer/cogo/internal/config"
+	"github.com/go-steer/cogo/internal/memory"
 	"github.com/go-steer/cogo/internal/permissions"
 	"github.com/go-steer/cogo/internal/testutil"
 )
@@ -107,6 +108,106 @@ func TestProgram_UnknownSlashShowsHint(t *testing.T) {
 	tm.WaitFinished(t, teatest.WithFinalTimeout(2*time.Second))
 }
 
+func TestProgram_MemoryCommand_NoMemoryLoaded(t *testing.T) {
+	t.Parallel()
+	tm := newTestModel(t, nil)
+
+	tm.Type("/memory")
+	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
+	teatest.WaitFor(t, tm.Output(), func(o []byte) bool {
+		return bytes.Contains(o, []byte("No memory loaded"))
+	}, teatest.WithDuration(2*time.Second))
+
+	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
+	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(2*time.Second))
+}
+
+func TestProgram_MemoryCommand_ShowsLoadedSources(t *testing.T) {
+	t.Parallel()
+	m, tm := newTestModelExposed(t, nil)
+	m.memory = memory.Loaded{
+		Instruction: "...",
+		Sources: []memory.Source{
+			{Scope: "project", Path: "/tmp/AGENTS.md", Bytes: 512},
+		},
+	}
+
+	tm.Type("/memory")
+	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
+	teatest.WaitFor(t, tm.Output(), func(o []byte) bool {
+		return bytes.Contains(o, []byte("Memory loaded")) &&
+			bytes.Contains(o, []byte("AGENTS.md"))
+	}, teatest.WithDuration(2*time.Second))
+
+	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
+	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(2*time.Second))
+}
+
+func TestProgram_StatsAfterTurn(t *testing.T) {
+	t.Parallel()
+	tm := newTestModel(t, []testutil.ScriptedResponse{
+		{TextChunks: []string{"hi"}, InputTokens: 100, OutputTokens: 25},
+	})
+
+	tm.Type("ping")
+	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
+	teatest.WaitFor(t, tm.Output(), func(o []byte) bool {
+		return bytes.Contains(o, []byte("hi"))
+	}, teatest.WithDuration(2*time.Second))
+
+	tm.Type("/stats")
+	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
+	teatest.WaitFor(t, tm.Output(), func(o []byte) bool {
+		return bytes.Contains(o, []byte("Session stats")) &&
+			bytes.Contains(o, []byte("Turns:    1"))
+	}, teatest.WithDuration(2*time.Second))
+
+	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
+	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(2*time.Second))
+}
+
+func TestProgram_ModelPickerAndDirectSwitch(t *testing.T) {
+	t.Parallel()
+	m, tm := newTestModelExposed(t, nil)
+
+	// Wire a stub rebuilder so /model can complete without a real provider.
+	rebuilt := ""
+	m.rebuildAgent = func(id string) (*agent.Agent, error) {
+		rebuilt = id
+		return agent.New(&testutil.FakeModel{ModelName: id})
+	}
+
+	// Bare /model opens the picker.
+	tm.Type("/model")
+	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
+	teatest.WaitFor(t, tm.Output(), func(o []byte) bool {
+		return bytes.Contains(o, []byte("Model picker"))
+	}, teatest.WithDuration(2*time.Second))
+
+	// Cancel the picker.
+	tm.Send(tea.KeyMsg{Type: tea.KeyEsc})
+	teatest.WaitFor(t, tm.Output(), func(o []byte) bool {
+		return !bytes.Contains(o, []byte("Model picker"))
+	}, teatest.WithDuration(2*time.Second))
+
+	// Direct switch via args.
+	tm.Type("/model gemini-3-flash-preview")
+	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
+	teatest.WaitFor(t, tm.Output(), func(o []byte) bool {
+		return bytes.Contains(o, []byte("Switched to gemini-3-flash-preview"))
+	}, teatest.WithDuration(2*time.Second))
+	if rebuilt != "gemini-3-flash-preview" {
+		t.Errorf("rebuildAgent called with %q, want gemini-3-flash-preview", rebuilt)
+	}
+
+	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
+	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(2*time.Second))
+}
+
 func TestProgram_PromptHistoryRecall(t *testing.T) {
 	t.Parallel()
 	tm := newTestModel(t, []testutil.ScriptedResponse{
@@ -175,8 +276,8 @@ func TestProgram_SlashPaletteOpensAndExecutes(t *testing.T) {
 		return bytes.Contains(o, []byte("Slash commands")) && bytes.Contains(o, []byte("/help"))
 	}, teatest.WithDuration(2*time.Second))
 
-	// Down to /clear, Enter triggers /clear flow.
-	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
+	// Filter to /clear by typing more characters; Enter triggers /clear.
+	tm.Type("cl")
 	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
 	teatest.WaitFor(t, tm.Output(), func(o []byte) bool {
 		return bytes.Contains(o, []byte("Clear chat history?"))

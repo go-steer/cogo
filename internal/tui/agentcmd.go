@@ -16,21 +16,29 @@ type programSender interface {
 }
 
 // startAgentTurn launches an agent turn in a goroutine. It returns
-// immediately; subsequent events (streamChunkMsg, turnDoneMsg, turnErrMsg,
-// turnCancelledMsg) flow through send.Send.
+// immediately; subsequent events (streamChunkMsg, usageMsg, turnDoneMsg,
+// turnErrMsg, turnCancelledMsg) flow through send.Send.
 //
 // ctx controls the turn — cancelling it interrupts the model and tools
 // mid-stream and the goroutine exits with turnCancelledMsg.
 func startAgentTurn(ctx context.Context, send programSender, a *agent.Agent, prompt string) {
 	go func() {
+		var lastIn, lastOut int
 		for event, err := range a.Run(ctx, prompt) {
 			if err != nil {
+				if lastIn > 0 || lastOut > 0 {
+					send.Send(usageMsg{InputTokens: lastIn, OutputTokens: lastOut})
+				}
 				if ctx.Err() != nil {
 					send.Send(turnCancelledMsg{})
 				} else {
 					send.Send(turnErrMsg{Err: err})
 				}
 				return
+			}
+			if event.UsageMetadata != nil {
+				lastIn = int(event.UsageMetadata.PromptTokenCount)
+				lastOut = int(event.UsageMetadata.CandidatesTokenCount)
 			}
 			if event.Content == nil || !event.Partial {
 				continue
@@ -41,8 +49,10 @@ func startAgentTurn(ctx context.Context, send programSender, a *agent.Agent, pro
 				}
 			}
 		}
-		// Iterator drained without error; check whether ctx was cancelled
-		// at the very end (rare but possible after the last event).
+		// Iterator drained.
+		if lastIn > 0 || lastOut > 0 {
+			send.Send(usageMsg{InputTokens: lastIn, OutputTokens: lastOut})
+		}
 		if ctx.Err() != nil {
 			send.Send(turnCancelledMsg{})
 			return

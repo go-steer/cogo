@@ -28,3 +28,11 @@ type turnErrMsg struct {
 // Distinct from turnErrMsg so we can show a tidy "(interrupted)" notice
 // instead of an error banner.
 type turnCancelledMsg struct{}
+
+// usageMsg carries the most recent usage metadata seen on an event,
+// emitted right before turnDoneMsg / turnErrMsg / turnCancelledMsg so
+// the model has a single place to update the tracker per turn.
+type usageMsg struct {
+	InputTokens  int
+	OutputTokens int
+}

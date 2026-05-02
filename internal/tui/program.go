@@ -11,9 +11,11 @@ import (
 
 	"github.com/go-steer/cogo/internal/agent"
 	"github.com/go-steer/cogo/internal/config"
+	"github.com/go-steer/cogo/internal/memory"
 	"github.com/go-steer/cogo/internal/models"
 	"github.com/go-steer/cogo/internal/permissions"
 	"github.com/go-steer/cogo/internal/tools"
+	"github.com/go-steer/cogo/internal/usage"
 )
 
 // Exit codes used by the headless package — re-exported here so cmd/cogo
@@ -74,12 +76,51 @@ func Run(ctx context.Context, cfg *config.Config, agentsDir string) (int, error)
 	if err != nil {
 		return ExitConfigError, err
 	}
-	a, err := agent.New(llm, agent.WithTools(registry.Tools))
+
+	// Load project + user memory; failure is non-fatal but surfaced.
+	projectRoot := cwd
+	if agentsDir != "" {
+		projectRoot = filepath.Dir(agentsDir)
+	}
+	loaded, err := memory.Load(projectRoot, cogoHome)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "cogo: memory load: %v\n", err)
+	}
+
+	a, err := agent.New(llm,
+		agent.WithTools(registry.Tools),
+		agent.WithSystemInstructionPrefix(loaded.Instruction),
+	)
 	if err != nil {
 		return ExitConfigError, err
 	}
 	m.agent = a
 	m.scope = gate.Scope()
+	m.memory = loaded
+	m.usage = usage.NewTracker()
+
+	// rebuildAgent lets /model swap the model mid-session without the
+	// TUI having to know about the provider, gate, or tools layout.
+	m.rebuildAgent = func(modelID string) (*agent.Agent, error) {
+		newLLM, err := provider.Model(ctx, modelID)
+		if err != nil {
+			return nil, err
+		}
+		return agent.New(newLLM,
+			agent.WithTools(registry.Tools),
+			agent.WithSystemInstructionPrefix(loaded.Instruction),
+		)
+	}
+	if agentsDir != "" {
+		m.persistModelChoice = func(modelID string) error {
+			c, err := config.Load(agentsDir)
+			if err != nil {
+				return err
+			}
+			c.Model.Name = modelID
+			return config.Save(filepath.Join(agentsDir, config.ConfigFileName), c)
+		}
+	}
 
 	// Hook for "Always allow" persistence. For Slice 3 we only persist
 	// path-scope additions to .agents/config.json; bash and other

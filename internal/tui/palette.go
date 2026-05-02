@@ -45,10 +45,15 @@ type paletteState struct {
 const MaxPaletteRows = 8
 
 // allSlashItems returns every slash command we want exposed in the
-// palette. Ordering doubles as default presentation order.
+// palette. Ordering doubles as default presentation order; group by
+// frequency so the most-used commands surface first when the filter
+// is empty.
 func allSlashItems() []paletteItem {
 	return []paletteItem{
 		{Display: "/help", Value: "/help", Hint: "show help"},
+		{Display: "/memory", Value: "/memory", Hint: "show loaded memory files"},
+		{Display: "/stats", Value: "/stats", Hint: "session token + cost breakdown"},
+		{Display: "/model", Value: "/model", Hint: "open the model picker"},
 		{Display: "/clear", Value: "/clear", Hint: "clear chat history"},
 		{Display: "/quit", Value: "/quit", Hint: "exit Cogo"},
 	}

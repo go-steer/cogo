@@ -30,9 +30,12 @@ func (m *Model) View() string {
 	header := m.renderHeader()
 	body := m.viewport.View()
 	var input string
-	if m.pendingConfirm != nil {
+	switch {
+	case m.pendingConfirm != nil:
 		input = m.renderConfirmModal()
-	} else {
+	case m.modelPicker != nil:
+		input = m.renderModelPicker()
+	default:
 		input = m.renderInput()
 	}
 	footer := m.renderFooter()
@@ -96,6 +99,31 @@ func paletteHeader(p *paletteState) string {
 	}
 }
 
+// renderModelPicker draws the /model picker in place of the input.
+// Same shape as the slash/file palette but with model IDs.
+func (m *Model) renderModelPicker() string {
+	p := m.modelPicker
+	header := m.styles.System.Render("Model picker (↑/↓ select · enter switch · esc cancel)")
+	var lines []string
+	for i, id := range p.items {
+		marker := "  "
+		if i == p.cursor {
+			marker = "▸ "
+		}
+		line := marker + id
+		if id == m.cfg.Model.Name {
+			line += "  (current)"
+		}
+		if i == p.cursor {
+			lines = append(lines, m.styles.HeaderAccent.Render(line))
+		} else {
+			lines = append(lines, m.styles.Footer.Render(line))
+		}
+	}
+	body := strings.Join(lines, "\n")
+	return m.styles.InputBorder.Render(header + "\n" + body)
+}
+
 // renderConfirmModal draws the permission request modal in place of
 // the input area. Kept simple in Slice 3: a bordered box with the
 // request detail and the four-key prompt.
@@ -127,7 +155,12 @@ func (m *Model) renderHeader() string {
 	cwd := shortDir(m.projectRoot)
 
 	left := fmt.Sprintf("Cogo · %s", m.styles.HeaderAccent.Render(m.cfg.Model.Name))
-	right := fmt.Sprintf("%s · provider: %s · mode: %s", cwd, provider, modeBadge(mode, m.styles))
+	right := fmt.Sprintf("%s · %s · %s", cwd, provider, modeBadge(mode, m.styles))
+	if m.usage != nil {
+		tot := m.usage.Totals()
+		right += fmt.Sprintf(" · σ ↑%d/↓%d/$%s",
+			tot.InputTokens, tot.OutputTokens, formatCost(tot.CostUSD))
+	}
 	gap := m.width - lipgloss.Width(left) - lipgloss.Width(right)
 	if gap < 1 {
 		gap = 1

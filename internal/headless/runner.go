@@ -10,14 +10,17 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	adkmodel "google.golang.org/adk/model"
 
 	"github.com/go-steer/cogo/internal/agent"
 	"github.com/go-steer/cogo/internal/config"
+	"github.com/go-steer/cogo/internal/memory"
 	"github.com/go-steer/cogo/internal/models"
 	"github.com/go-steer/cogo/internal/permissions"
 	"github.com/go-steer/cogo/internal/tools"
+	"github.com/go-steer/cogo/internal/usage"
 )
 
 // Exit codes — kept distinct so CI can disambiguate failure modes.
@@ -31,12 +34,16 @@ const (
 // stdout as partial events arrive. Tool-call summaries are written to
 // stderr as one line per call. Returns an exit code suitable for os.Exit.
 //
-// agentOpts lets the caller pass extra agent.Options (notably WithTools);
-// when nil, the agent runs with no tools — useful for tests with FakeModel.
+// agentOpts lets the caller pass extra agent.Options (notably WithTools
+// and WithSystemInstructionPrefix). When nil, the agent runs with no
+// tools and the default instruction — useful for tests with FakeModel.
+//
+// tracker (optional) records per-turn usage; when supplied, RunFromConfig
+// writes an exit summary using its totals. Pass nil to skip accounting.
 //
 // A trailing newline is always added to stdout when at least one chunk
 // was written, so shell pipelines see a clean terminator.
-func Run(ctx context.Context, m adkmodel.LLM, prompt string, stdout, stderr io.Writer, agentOpts ...agent.Option) (int, error) {
+func Run(ctx context.Context, m adkmodel.LLM, prompt string, stdout, stderr io.Writer, tracker *usage.Tracker, pricing usage.Pricing, agentOpts ...agent.Option) (int, error) {
 	if prompt == "" {
 		return ExitConfigError, fmt.Errorf("headless: prompt is required")
 	}
@@ -47,12 +54,19 @@ func Run(ctx context.Context, m adkmodel.LLM, prompt string, stdout, stderr io.W
 	}
 
 	wroteAnything := false
+	var lastUsageInput, lastUsageOutput int
 	for event, err := range a.Run(ctx, prompt) {
 		if err != nil {
 			if wroteAnything {
 				_, _ = fmt.Fprintln(stdout) // flush trailing newline before error
 			}
 			return ExitAgentError, fmt.Errorf("headless: agent run: %w", err)
+		}
+		// Capture usage metadata when present. Final events typically
+		// carry the totals for the turn; partials may also have it.
+		if event.UsageMetadata != nil {
+			lastUsageInput = int(event.UsageMetadata.PromptTokenCount)
+			lastUsageOutput = int(event.UsageMetadata.CandidatesTokenCount)
 		}
 		if event.Content == nil {
 			continue
@@ -74,6 +88,9 @@ func Run(ctx context.Context, m adkmodel.LLM, prompt string, stdout, stderr io.W
 			}
 		}
 	}
+	if tracker != nil && (lastUsageInput > 0 || lastUsageOutput > 0) {
+		tracker.Append(m.Name(), lastUsageInput, lastUsageOutput, pricing)
+	}
 	if wroteAnything {
 		if _, err := fmt.Fprintln(stdout); err != nil {
 			return ExitAgentError, fmt.Errorf("headless: write final newline: %w", err)
@@ -84,12 +101,17 @@ func Run(ctx context.Context, m adkmodel.LLM, prompt string, stdout, stderr io.W
 
 // RunFromConfig is the entry point used by cmd/cogo: it builds a Provider
 // from cfg, asks for the configured model ID, assembles the built-in
-// tools with a permission gate, and dispatches to Run.
+// tools with a permission gate, loads project + user memory, runs the
+// turn, and writes a one-line cost/usage summary to stderr on success.
 //
 // Headless invocations have no TTY for prompts, so the gate is built
 // without a Prompter: anything that would prompt fails fast with a
 // clear message asking the user to add an explicit allowlist entry.
-func RunFromConfig(ctx context.Context, cfg *config.Config, prompt string, stdout, stderr io.Writer) (int, error) {
+//
+// agentsDir is the resolved .agents/ directory if discovered (else "");
+// passing it lets the memory loader anchor the project search at the
+// right root.
+func RunFromConfig(ctx context.Context, cfg *config.Config, agentsDir, prompt string, stdout, stderr io.Writer) (int, error) {
 	provider, err := models.Resolve(cfg)
 	if err != nil {
 		return ExitConfigError, err
@@ -102,7 +124,7 @@ func RunFromConfig(ctx context.Context, cfg *config.Config, prompt string, stdou
 	userHome, _ := os.UserHomeDir()
 	cogoHome := ""
 	if userHome != "" {
-		cogoHome = userHome + "/.cogo"
+		cogoHome = filepath.Join(userHome, ".cogo")
 	}
 	gate, err := permissions.FromConfig(cfg, cwd, cogoHome, nil /*no prompter*/)
 	if err != nil {
@@ -112,5 +134,42 @@ func RunFromConfig(ctx context.Context, cfg *config.Config, prompt string, stdou
 	if err != nil {
 		return ExitConfigError, err
 	}
-	return Run(ctx, m, prompt, stdout, stderr, agent.WithTools(registry.Tools))
+
+	// Project memory anchors at agentsDir's parent (the project root)
+	// when we have one; otherwise the cwd is the best guess.
+	projectRoot := cwd
+	if agentsDir != "" {
+		projectRoot = filepath.Dir(agentsDir)
+	}
+	loaded, err := memory.Load(projectRoot, cogoHome)
+	if err != nil {
+		// Memory load failures are surfaced as warnings, not fatal:
+		// the agent should still be usable without memory.
+		fmt.Fprintf(stderr, "cogo: memory load: %v\n", err)
+	}
+
+	tracker := usage.NewTracker()
+	pricing := usage.PriceFor(cfg.Model.Name, cfg)
+
+	opts := []agent.Option{
+		agent.WithTools(registry.Tools),
+		agent.WithSystemInstructionPrefix(loaded.Instruction),
+	}
+	code, err := Run(ctx, m, prompt, stdout, stderr, tracker, pricing, opts...)
+	if err == nil && code == ExitOK {
+		writeExitSummary(stderr, tracker, m.Name())
+	}
+	return code, err
+}
+
+// writeExitSummary emits a one-line usage tally suitable for shell
+// pipelines / CI logs. No-op when no turns were recorded (e.g. the
+// model returned no usage metadata).
+func writeExitSummary(w io.Writer, t *usage.Tracker, modelID string) {
+	tot := t.Totals()
+	if tot.Turns == 0 {
+		return
+	}
+	fmt.Fprintf(w, "cogo: %d turn(s) · ↑%d ↓%d tokens · $%.4f (%s)\n",
+		tot.Turns, tot.InputTokens, tot.OutputTokens, tot.CostUSD, modelID)
 }

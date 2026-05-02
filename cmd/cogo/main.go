@@ -82,7 +82,7 @@ func run(args []string, stdout, stderr *os.File) int {
 	}
 
 	if prompt != "" {
-		code, err := headless.RunFromConfig(ctx, cfg, prompt, stdout, stderr)
+		code, err := headless.RunFromConfig(ctx, cfg, agentsDir, prompt, stdout, stderr)
 		if err != nil {
 			fmt.Fprintf(stderr, "cogo: %v\n", err)
 		}

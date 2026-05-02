@@ -93,6 +93,23 @@ func WithTools(ts []tool.Tool) Option {
 	return func(o *options) { o.tools = append(o.tools, ts...) }
 }
 
+// WithSystemInstructionPrefix prepends prefix to the agent's default
+// instruction. Used for memory loading: AGENTS.md / CLAUDE.md /
+// GEMINI.md project memory becomes part of the system prompt rather
+// than the user's first message.
+func WithSystemInstructionPrefix(prefix string) Option {
+	return func(o *options) {
+		if prefix == "" {
+			return
+		}
+		if o.instruction == "" {
+			o.instruction = prefix
+			return
+		}
+		o.instruction = prefix + "\n\n" + o.instruction
+	}
+}
+
 // New constructs an Agent backed by model. Returns a clear error if the
 // underlying ADK constructors reject the configuration.
 func New(model adkmodel.LLM, opts ...Option) (*Agent, error) {

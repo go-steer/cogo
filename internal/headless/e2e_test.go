@@ -42,7 +42,7 @@ func TestE2E_VertexPing(t *testing.T) {
 	cfg.Permissions.Mode = "yolo" // headless: no prompter; need non-ask mode
 
 	var stdout, stderr bytes.Buffer
-	code, err := headless.RunFromConfig(ctx, cfg, "Reply with exactly the word PONG and nothing else.", &stdout, &stderr)
+	code, err := headless.RunFromConfig(ctx, cfg, "", "Reply with exactly the word PONG and nothing else.", &stdout, &stderr)
 	if err != nil {
 		t.Fatalf("RunFromConfig: %v (stderr=%s)", err, stderr.String())
 	}
@@ -83,7 +83,7 @@ func TestE2E_VertexTools(t *testing.T) {
 	prompt := "Use the read_file tool to read " + target + " and tell me the file's contents verbatim."
 
 	var stdout, stderr bytes.Buffer
-	code, err := headless.RunFromConfig(ctx, cfg, prompt, &stdout, &stderr)
+	code, err := headless.RunFromConfig(ctx, cfg, "", prompt, &stdout, &stderr)
 	if err != nil {
 		t.Fatalf("RunFromConfig: %v\nstdout=%s\nstderr=%s", err, stdout.String(), stderr.String())
 	}

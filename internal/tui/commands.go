@@ -9,44 +9,56 @@ const (
 	SlashHelp    SlashAction = "help"
 	SlashClear   SlashAction = "clear"
 	SlashQuit    SlashAction = "quit"
+	SlashMemory  SlashAction = "memory"
+	SlashStats   SlashAction = "stats"
+	SlashModel   SlashAction = "model"
 	SlashUnknown SlashAction = "unknown"
 )
 
-// Slash command names accepted in V1 (Slice 2 minimal set). The full
-// dispatcher with /model, /mcp, /skills, /memory, /stats lands in Slice 4.
+// Slash command names accepted in V1. /mcp + /skills + /init join in
+// Slice 4b alongside MCP, skills, and the init wizard.
 var slashAliases = map[string]SlashAction{
-	"help":  SlashHelp,
-	"?":     SlashHelp,
-	"clear": SlashClear,
-	"quit":  SlashQuit,
-	"exit":  SlashQuit,
-	"q":     SlashQuit,
+	"help":   SlashHelp,
+	"?":      SlashHelp,
+	"clear":  SlashClear,
+	"quit":   SlashQuit,
+	"exit":   SlashQuit,
+	"q":      SlashQuit,
+	"memory": SlashMemory,
+	"stats":  SlashStats,
+	"model":  SlashModel,
+	"models": SlashModel,
 }
 
 // ParseSlash inspects input. If it looks like a slash command (leading
 // `/` after trimming whitespace), returns the recognized action, the
 // raw command name (without leading `/`, as the user typed it for error
-// messages), and isSlash=true. Otherwise returns ("", "", false).
+// messages), the args (everything after the command token, trimmed),
+// and isSlash=true. Otherwise returns ("", "", "", false).
 //
 // Unrecognized slash commands return SlashUnknown so callers can show a
 // friendly "unknown command" message in the chat without leaking input
 // to the model.
-func ParseSlash(input string) (action SlashAction, command string, isSlash bool) {
+func ParseSlash(input string) (action SlashAction, command, args string, isSlash bool) {
 	trimmed := strings.TrimSpace(input)
 	if !strings.HasPrefix(trimmed, "/") {
-		return "", "", false
+		return "", "", "", false
 	}
 	body := strings.TrimSpace(trimmed[1:])
 	if body == "" {
 		// Bare "/" — treat as unknown.
-		return SlashUnknown, "", true
+		return SlashUnknown, "", "", true
 	}
-	// First token only; any args (none in Slice 2) are ignored for now.
-	cmd := strings.ToLower(strings.Fields(body)[0])
+	fields := strings.Fields(body)
+	cmd := strings.ToLower(fields[0])
+	args = ""
+	if len(fields) > 1 {
+		args = strings.TrimSpace(strings.TrimPrefix(body, fields[0]))
+	}
 	if a, ok := slashAliases[cmd]; ok {
-		return a, cmd, true
+		return a, cmd, args, true
 	}
-	return SlashUnknown, cmd, true
+	return SlashUnknown, cmd, args, true
 }
 
 // HelpText returns the multi-line help message printed by /help.
@@ -65,6 +77,10 @@ func HelpText() string {
 		"  /help       show this help",
 		"  /clear      clear chat history (asks for confirmation)",
 		"  /quit       exit Cogo (alias: /exit)",
+		"  /memory     show which AGENTS.md/CLAUDE.md/GEMINI.md files were loaded",
+		"  /stats      show per-turn token use and session totals",
+		"  /model      open the model picker (alias: /models)",
+		"  /model <id> switch to <id> directly without the picker",
 		"",
 		"Keys:",
 		"  PgUp/PgDn   scroll chat history",

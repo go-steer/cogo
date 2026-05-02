@@ -10,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/go-steer/cogo/internal/permissions"
+	"github.com/go-steer/cogo/internal/usage"
 )
 
 // Update is Cogo's central message dispatch.
@@ -21,6 +22,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Permission modal preempts every other key handler when up.
 		if m.pendingConfirm != nil {
 			return m.handleConfirmKey(msg)
+		}
+		// Model picker likewise.
+		if m.modelPicker != nil {
+			return m.handleModelPickerKey(msg)
 		}
 		return m.handleKey(msg)
 	case confirmReqMsg:
@@ -35,6 +40,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case streamChunkMsg:
 		return m.handleStreamChunk(msg)
+	case usageMsg:
+		if m.usage != nil {
+			pricing := usage.PriceFor(m.cfg.Model.Name, m.cfg)
+			m.usage.Append(m.cfg.Model.Name, msg.InputTokens, msg.OutputTokens, pricing)
+		}
+		return m, nil
 	case turnDoneMsg:
 		return m.handleTurnDone()
 	case turnErrMsg:
@@ -373,9 +384,9 @@ func (m *Model) handleSubmit() (tea.Model, tea.Cmd) {
 	}
 
 	// Slash command?
-	if action, cmd, isSlash := ParseSlash(input); isSlash {
+	if action, cmd, args, isSlash := ParseSlash(input); isSlash {
 		m.textarea.Reset()
-		return m.handleSlash(action, cmd)
+		return m.handleSlash(action, cmd, args)
 	}
 
 	// Regular prompt → start a turn. Expand any @<path> file references
@@ -425,7 +436,7 @@ func (m *Model) handleSubmit() (tea.Model, tea.Cmd) {
 	return m, m.spinner.Tick
 }
 
-func (m *Model) handleSlash(action SlashAction, cmd string) (tea.Model, tea.Cmd) {
+func (m *Model) handleSlash(action SlashAction, cmd, args string) (tea.Model, tea.Cmd) {
 	switch action {
 	case SlashHelp:
 		m.history.Append(Message{Role: RoleSystem, Text: HelpText()})
@@ -436,6 +447,16 @@ func (m *Model) handleSlash(action SlashAction, cmd string) (tea.Model, tea.Cmd)
 		m.history.Append(Message{Role: RoleSystem, Text: "Clear chat history? Type 'y' or 'yes' to confirm; anything else cancels."})
 		m.refreshViewport()
 		return m, nil
+	case SlashMemory:
+		m.history.Append(Message{Role: RoleSystem, Text: m.renderMemoryInfo()})
+		m.refreshViewport()
+		return m, nil
+	case SlashStats:
+		m.history.Append(Message{Role: RoleSystem, Text: m.renderStatsInfo()})
+		m.refreshViewport()
+		return m, nil
+	case SlashModel:
+		return m.handleModelCommand(args)
 	case SlashQuit:
 		return m, tea.Quit
 	default:
@@ -445,12 +466,88 @@ func (m *Model) handleSlash(action SlashAction, cmd string) (tea.Model, tea.Cmd)
 	}
 }
 
+// handleModelCommand handles `/model` (no args → open picker) and
+// `/model <id>` (direct switch). Switching mid-session resets the
+// agent and clears the chat history (the viewport content stays for
+// reference).
+func (m *Model) handleModelCommand(args string) (tea.Model, tea.Cmd) {
+	args = strings.TrimSpace(args)
+	if args == "" {
+		// Open picker.
+		items := availableModels()
+		cur := indexOfModel(m.cfg.Model.Name)
+		if cur < 0 {
+			cur = 0
+		}
+		m.modelPicker = &modelPickerState{items: items, cursor: cur}
+		return m, nil
+	}
+	return m.switchModel(args)
+}
+
+// switchModel rebuilds the agent with the given model ID and persists
+// the choice to .agents/config.json when an agentsDir is available.
+// Returns a system message describing the result.
+func (m *Model) switchModel(modelID string) (tea.Model, tea.Cmd) {
+	if m.rebuildAgent == nil {
+		m.history.Append(Message{Role: RoleError, Text: "Cannot switch model: agent rebuilder not configured."})
+		m.refreshViewport()
+		return m, nil
+	}
+	if modelID == m.cfg.Model.Name {
+		m.history.Append(Message{Role: RoleSystem, Text: "Already using " + modelID + "."})
+		m.refreshViewport()
+		return m, nil
+	}
+	newAgent, err := m.rebuildAgent(modelID)
+	if err != nil {
+		m.history.Append(Message{Role: RoleError, Text: "Switch failed: " + err.Error()})
+		m.refreshViewport()
+		return m, nil
+	}
+	m.agent = newAgent
+	m.cfg.Model.Name = modelID
+	if m.persistModelChoice != nil {
+		if err := m.persistModelChoice(modelID); err != nil {
+			m.history.Append(Message{Role: RoleSystem, Text: "Switched in-session, but couldn't persist to config: " + err.Error()})
+		}
+	}
+	m.history.Append(Message{Role: RoleSystem, Text: "Switched to " + modelID + ". Conversation context resets for the new model."})
+	m.refreshViewport()
+	return m, nil
+}
+
 func (m *Model) handleStreamChunk(msg streamChunkMsg) (tea.Model, tea.Cmd) {
 	if m.currentAssistantIdx < 0 {
 		return m, nil
 	}
 	m.history.AppendText(m.currentAssistantIdx, msg.Text)
 	m.refreshViewport()
+	return m, nil
+}
+
+// handleModelPickerKey runs while the /model picker overlay is open.
+// Up/Down navigate; Enter selects + closes; Esc dismisses.
+func (m *Model) handleModelPickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.modelPicker == nil {
+		return m, nil
+	}
+	switch msg.String() {
+	case "up":
+		if m.modelPicker.cursor > 0 {
+			m.modelPicker.cursor--
+		}
+	case "down":
+		if m.modelPicker.cursor < len(m.modelPicker.items)-1 {
+			m.modelPicker.cursor++
+		}
+	case "esc":
+		m.modelPicker = nil
+	case "enter":
+		choice := m.modelPicker.items[m.modelPicker.cursor]
+		m.modelPicker = nil
+		return m.switchModel(choice)
+	}
 	return m, nil
 }
 

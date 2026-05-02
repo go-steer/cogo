@@ -30,7 +30,7 @@ func TestParseSlash(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			action, cmd, isSlash := ParseSlash(tc.input)
+			action, cmd, _, isSlash := ParseSlash(tc.input)
 			if isSlash != tc.wantIsSlash {
 				t.Errorf("isSlash = %v, want %v", isSlash, tc.wantIsSlash)
 			}

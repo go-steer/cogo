@@ -19,8 +19,13 @@ import (
 // emits a single TurnComplete=true event whose Content is the concatenation
 // of all chunks. In non-streaming mode (stream=false) only the final
 // TurnComplete event is emitted.
+//
+// InputTokens / OutputTokens populate the final event's UsageMetadata
+// when set, so usage-tracking tests don't need a real model.
 type ScriptedResponse struct {
-	TextChunks []string
+	TextChunks   []string
+	InputTokens  int
+	OutputTokens int
 }
 
 // FakeModel implements model.LLM with scripted output for tests.
@@ -67,10 +72,18 @@ func (f *FakeModel) GenerateContent(_ context.Context, _ *model.LLMRequest, stre
 				}
 			}
 		}
-		yield(&model.LLMResponse{
+		final := &model.LLMResponse{
 			Content:      textContent(concat(sr.TextChunks)),
 			TurnComplete: true,
-		}, nil)
+		}
+		if sr.InputTokens > 0 || sr.OutputTokens > 0 {
+			final.UsageMetadata = &genai.GenerateContentResponseUsageMetadata{
+				PromptTokenCount:     int32(sr.InputTokens),
+				CandidatesTokenCount: int32(sr.OutputTokens),
+				TotalTokenCount:      int32(sr.InputTokens + sr.OutputTokens),
+			}
+		}
+		yield(final, nil)
 	}
 }
 
