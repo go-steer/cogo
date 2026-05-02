@@ -1,80 +1,177 @@
 # cogo
 
-A terminal-native agentic CLI for Go developers — think *Claude Code* but Go-native, built on the Google ADK and Gemini 3.x. Configurable per project via a `.agents/` directory, with first-class support for MCP servers and Claude-compatible skills.
+A terminal-native agentic CLI for Go developers — like Claude Code, but built in Go on the [Google ADK](https://github.com/google/adk-go) and Gemini 3.x. One static binary, no Python runtime, project-scoped configuration, first-class support for [MCP](https://modelcontextprotocol.io) servers and Claude-compatible skills.
 
-> **Status:** V1 feature-complete on `dev` — full Claude-Code-like surface: TUI with streaming markdown, slash and `@`-file palettes, prompt history, built-in tools (file / bash / todo) gated by a permission system with non-overridable bash denylist + path scoping, Claude-compatible skills, MCP server integration with elicitation stub, project memory with fallback chain, mid-session model switching, `cogo init` wizard, OpenTelemetry instrumentation, session transcript persistence on exit, `--debug` JSONL log, and `/reload` to refresh `.agents/` in place. Remaining polish (CI + goreleaser, MCP child-process cleanup, schema-driven elicitation modal) is enumerated in [`docs/SLICES.md`](./docs/SLICES.md) Slice 5.
+[![CI](https://github.com/go-steer/cogo/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/go-steer/cogo/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
+[![Go Reference](https://pkg.go.dev/badge/github.com/go-steer/cogo.svg)](https://pkg.go.dev/github.com/go-steer/cogo)
 
-## Why
+## Highlights
 
-Existing AI CLIs are great but Python-heavy and tightly coupled to one vendor. Cogo aims to give Go developers a single static binary that:
+- **Two modes, one binary.** `cogo -p "..."` for shell pipelines and CI; `cogo` on a TTY for an interactive Bubble Tea chat with streaming markdown, slash and `@`-file palettes, and prompt history.
+- **Project-local configuration.** A `.agents/` directory holds the model, tool settings, MCP servers, skills, and project memory. Auto-discovered like `.git`.
+- **Built-in tools.** `read_file`, `write_file`, `edit_file`, `list_dir`, `bash`, `todo` — the same surface a coding agent expects, with per-tool output caps.
+- **MCP-native.** Drop a `.agents/mcp.json` describing stdio or HTTP MCP servers and their tools become callable. Schema-driven elicitation modal for servers that prompt the user.
+- **Claude-compatible skills.** `SKILL.md` bundles under `.agents/skills/<name>/` are loaded lazily and exposed as agent tools.
+- **Permissions you can trust.** Three modes (`ask` / `allow` / `yolo`), an in-TUI approval modal, a non-overridable bash denylist (no `rm -rf /`), and path-scope confinement for file tools.
+- **Project memory.** `AGENTS.md` / `CLAUDE.md` / `GEMINI.md` at the project root + `~/.cogo/AGENTS.md` user-global, all merged into the system prompt.
+- **Cost surfacing.** Per-turn `↑in · ↓out · $cost` footer, running session total in the header, headless one-line summary on stderr.
+- **Telemetry + transcripts.** OpenTelemetry support (`--otel=console` or OTLP) and an automatically-persisted JSON transcript per session under `.agents/sessions/`.
 
-- Drives a multi-turn, tool-using conversation in the terminal.
-- Reads its configuration, skills, and MCP servers from a project-local `.agents/` directory.
-- Plugs into either the public Gemini API (key auth) or Vertex AI (ADC + GCP project), with the model abstraction designed to admit other providers later.
-- Is built and shipped as one fast, dependency-free binary.
+## Install
 
-## Quickstart
-
-Requires Go 1.24+ (see `go.mod`).
+**Homebrew** (recommended):
 
 ```bash
-git clone https://github.com/go-steer/cogo
-cd cogo
-
-# Pick one auth path:
-
-# 1) Public Gemini API
-export GOOGLE_API_KEY=...
-
-# 2) Vertex AI
-gcloud auth application-default login
-export GOOGLE_GENAI_USE_VERTEXAI=true
-export GOOGLE_CLOUD_PROJECT=...
-export GOOGLE_CLOUD_LOCATION=us-central1   # or "global"
-
-go run ./cmd/cogo -p "What is 2+2?"
+brew install go-steer/cogo/cogo
 ```
 
-See [`.env.example`](./.env.example) for a copy-pasteable template.
-
-## What works today
-
-- `cogo -p "<prompt>"` runs a single turn and streams the assistant's response to stdout (Slice 1).
-- `cogo` (no args, on a TTY) opens an interactive Bubble Tea chat: streaming text in real time, markdown rendering on completion, multi-line input (Shift+Enter for newline), and `/help` / `/clear` / `/quit` slash commands (Slice 2).
-- Type `/` at the start of an empty prompt to open a slash-command palette; type `@` anywhere to open a file picker. Selecting a file inserts `@<path>` and the file contents are inlined when you submit the message.
-- Built-in tools the agent can call: `read_file`, `write_file`, `edit_file`, `list_dir`, `bash`, `todo`. Tool output is truncated when it exceeds the per-tool caps in `tool_output` config (Slice 3).
-- Permission system with `ask` / `allow` / `yolo` modes: an in-TUI modal prompts before mutating ops with **y** (allow once) / **s** (allow this session) / **a** (always allow, persisted) / **n** or **esc** (deny). A non-overridable bash denylist refuses things like `rm -rf /`. Path scoping confines file tools to the project root + `~/.cogo/` + any explicit `path_scope.allow` entries (Slice 3).
-- Project memory (`AGENTS.md` → `CLAUDE.md` → `GEMINI.md` fallback at the project root, plus `~/.cogo/AGENTS.md` user-global) is loaded into the agent's system prompt at startup. Inspect via `/memory` (Slice 4a).
-- Per-prompt + session-total token / cost surfacing: each completed assistant turn shows `↑in · ↓out · $cost` underneath; the header carries a running session total; headless `cogo -p` prints a one-line exit summary on stderr. Use `/stats` for a full breakdown (Slice 4a).
-- Mid-session model switching: bare `/model` opens a picker; `/model gemini-3-flash-preview` switches directly. Persisted to `.agents/config.json` when a project config exists (Slice 4a).
-- **MCP server integration**: declare stdio or Streamable HTTP MCP servers in `.agents/mcp.json`; their tools become callable in the agent loop. `/mcp` shows server status. Elicitation handler is wired (declines with a notice; full schema-form modal lands in Slice 5 polish) (Slice 4b).
-- **Skills**: drop a Claude-compatible `SKILL.md` bundle under `.agents/skills/<name>/` and the agent can invoke it. `/skills` lists what's discovered. Body markdown loads lazily (Slice 4b).
-- **`cogo init`**: scaffolds `.agents/{config.json, .gitignore, AGENTS.md}` for a fresh project. Refuses to overwrite without `--force`. `cogo init --interactive` walks a Bubble Tea wizard for provider / model / permission mode (Slice 4b).
-- Ctrl+C cancels the current turn while streaming; a second press while idle exits.
-- Non-TTY invocation (piped stdin, CI) prints a hint pointing at `-p` and exits non-zero rather than hanging.
-- Both auth paths work (public Gemini API + Vertex AI).
-- `.agents/config.json` is auto-discovered (walks up from the working directory like `.git`); falls back to built-in defaults when absent.
-- Provider auto-detection from environment variables when `model.provider` is not set in config.
-
-CI + goreleaser, the schema-driven MCP elicitation modal, and proper child-process cleanup on `/reload` are tracked in [`docs/SLICES.md`](./docs/SLICES.md) Slice 5 polish bullets.
-
-## Tests
+**Docker / OCI** (multi-arch image on GHCR):
 
 ```bash
-go test ./...                              # unit only, no network
+docker pull ghcr.io/go-steer/cogo:latest
+docker run --rm -it -v "$PWD:/work" -w /work ghcr.io/go-steer/cogo:latest -p "hello"
+```
 
+**`go install`** (HEAD from main):
+
+```bash
+go install github.com/go-steer/cogo/cmd/cogo@latest
+```
+
+**Pre-built binaries** for Linux + macOS (amd64 + arm64) are attached to every [GitHub release](https://github.com/go-steer/cogo/releases). Verify the version with `cogo --version`.
+
+## Quick start
+
+Cogo speaks Gemini through one of two auth paths:
+
+```bash
+# Option A — Vertex AI
+gcloud auth application-default login
+export GOOGLE_GENAI_USE_VERTEXAI=true
+export GOOGLE_CLOUD_PROJECT=your-project
+export GOOGLE_CLOUD_LOCATION=us-central1   # or "global"
+
+# Option B — Public Gemini API
+export GOOGLE_API_KEY=...
+```
+
+(See [`.env.example`](./.env.example) for a copy-pasteable template.)
+
+Then either:
+
+```bash
+# Interactive TUI
+cogo
+
+# One-shot, pipeable
+cogo -p "Summarize internal/agent in three bullets."
+```
+
+Want a fresh project bootstrapped? `cogo init` writes `.agents/{config.json, .gitignore, AGENTS.md}` with sensible defaults; `cogo init --interactive` walks a wizard for provider / model / permission mode.
+
+## Configuration
+
+Cogo looks for a `.agents/` directory by walking up from the current working directory (same way Git finds `.git`). Layout:
+
+```
+.agents/
+├── config.json          # model, provider, permission mode, path scope, OTEL
+├── mcp.json             # MCP server definitions (stdio + Streamable HTTP)
+├── skills/              # one subdir per skill, each with a SKILL.md
+│   └── example/SKILL.md
+├── AGENTS.md            # project memory (CLAUDE.md / GEMINI.md also accepted)
+├── sessions/            # transcripts, written on /quit and Ctrl+C
+└── logs/                # JSONL debug logs (when --debug is set)
+```
+
+When no `.agents/` is present Cogo runs with built-in defaults — useful for quick one-offs in arbitrary directories.
+
+## Slash commands
+
+| Command    | Effect                                                                      |
+|------------|-----------------------------------------------------------------------------|
+| `/help`    | Full keymap + command list.                                                 |
+| `/memory`  | Show which memory files were loaded and from where.                         |
+| `/stats`   | Per-session token + cost breakdown.                                         |
+| `/model`   | Open the model picker, or `/model <id>` to switch directly.                 |
+| `/mcp`     | List configured MCP servers + each server's tools.                          |
+| `/skills`  | List discovered skills.                                                     |
+| `/reload`  | Re-read `.agents/` from disk and rebuild the agent in place (no chat reset).|
+| `/clear`   | Clear chat history (with confirmation).                                     |
+| `/quit`    | Exit cleanly, persisting a session transcript.                              |
+
+Type `/` at the start of an empty prompt to open the slash palette; type `@` anywhere to inline a file by path.
+
+## Permissions
+
+Three modes set in `.agents/config.json` under `permissions.mode`:
+
+- **`ask`** — prompt before any mutating tool call (default).
+- **`allow`** — pre-approve the listed tool patterns; prompt for everything else.
+- **`yolo`** — no prompts. Use sparingly; the bash denylist still blocks the truly dangerous commands.
+
+When the modal appears: **`y`** allow once, **`s`** allow this session, **`a`** always allow (persisted to `.agents/config.json`), **`n`** or **Esc** deny.
+
+File-touching tools are scoped to the project root + `~/.cogo/` plus any `path_scope.allow` glob patterns you add. Out-of-scope reads via `@<path>` still work but surface a one-line warning so private files don't end up in the model context by accident.
+
+## MCP + skills
+
+Drop a JSON file at `.agents/mcp.json`:
+
+```json
+{
+  "version": 1,
+  "servers": {
+    "filesystem": {
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/Users/me/work"]
+    },
+    "github": {
+      "transport": "http",
+      "url": "https://mcp.example.com/v1",
+      "headers": { "Authorization": "Bearer ${env:GITHUB_TOKEN}" }
+    }
+  }
+}
+```
+
+Tools are namespaced as `<server>_<tool>` so they never collide with built-ins. `/mcp` shows status and tool inventory.
+
+Skills follow Claude Code's bundle layout — drop `.agents/skills/<name>/SKILL.md` (with frontmatter `name:` + `description:`) and the agent will discover and invoke it. Body markdown is loaded on demand.
+
+## Telemetry & observability
+
+- **OpenTelemetry** — set `cfg.OTEL.Exporter` to `none` (default), `console`, or `otlp`. With `otlp`, point `OTEL_EXPORTER_OTLP_ENDPOINT` at your collector. Spans cover the agent loop, tool calls, and provider requests.
+- **Session transcripts** — every interactive session writes `.agents/sessions/<timestamp>.json` on exit, with the full message log and usage totals.
+- **Debug logs** — `cogo --debug -p "..."` swaps the slog handler to a JSONL writer under `.agents/logs/<timestamp>.jsonl` for after-the-fact inspection.
+
+## Development
+
+The full local CI pipeline lives under [`dev/`](./dev/) and is the same source of truth as the GitHub Actions workflow. Quick start:
+
+```bash
+dev/tools/ci              # run every check (format, vet, build, lint, mod-tidy, tests, vuln)
+dev/tools/fix-go-format   # auto-fix formatting
+```
+
+Missing tools (`golangci-lint`, `goimports`, `govulncheck`) auto-install on first use; only prereq is a Go toolchain. See [`dev/README.md`](./dev/README.md) for the full layout, contributor checklist, and license-header rules.
+
+End-to-end Vertex tests are gated on `COGO_E2E=1` plus the same auth env vars used by the runtime:
+
+```bash
 COGO_E2E=1 \
 GOOGLE_GENAI_USE_VERTEXAI=true \
 GOOGLE_CLOUD_PROJECT=... \
 GOOGLE_CLOUD_LOCATION=... \
-  go test ./internal/headless/... -run E2E -v   # hits real Vertex
+  go test ./internal/headless/... -run E2E -v
 ```
 
-## Design
+## Documentation
 
-- [`docs/REQUIREMENTS.md`](./docs/REQUIREMENTS.md) — V1 scope, FRs and NFRs, resolved-decisions log.
-- [`docs/DESIGN.md`](./docs/DESIGN.md) — architecture, configuration sketches, module layout, testing strategy.
-- [`docs/SLICES.md`](./docs/SLICES.md) — slice-by-slice build order plus the running list of polish items.
+- [`docs/REQUIREMENTS.md`](./docs/REQUIREMENTS.md) — V1 scope, functional & non-functional requirements.
+- [`docs/DESIGN.md`](./docs/DESIGN.md) — architecture, configuration, module layout, testing strategy.
 - [`AGENTS.md`](./AGENTS.md) — project memory that `cogo` itself loads when run inside this repo.
 
 ## License
