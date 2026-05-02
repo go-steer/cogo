@@ -48,20 +48,27 @@ func run(args []string, stdout, stderr *os.File) int {
 	fs.SetOutput(stderr)
 
 	var (
-		prompt string
-		debug  bool
-		help   bool
+		prompt      string
+		debug       bool
+		help        bool
+		showVersion bool
 	)
 	fs.StringVar(&prompt, "p", "", "Shorthand for -prompt.")
 	fs.StringVar(&prompt, "prompt", "", "Run a single prompt non-interactively and stream the reply to stdout, then exit.")
 	fs.BoolVar(&debug, "debug", false, "Enable verbose logging to stderr.")
 	fs.BoolVar(&help, "h", false, "Show help and exit.")
 	fs.BoolVar(&help, "help", false, "Show help and exit.")
+	fs.BoolVar(&showVersion, "version", false, "Show version and exit.")
+	fs.BoolVar(&showVersion, "v", false, "Shorthand for -version.")
 	fs.Usage = func() { printUsage(stderr) }
 
 	if err := fs.Parse(args); err != nil {
 		// flag.ContinueOnError prints its own message to fs.Output() (stderr).
 		return headless.ExitConfigError
+	}
+	if showVersion {
+		fmt.Fprintln(stdout, versionString())
+		return headless.ExitOK
 	}
 	if help {
 		printUsage(stdout)
@@ -164,6 +171,7 @@ Flags:
   -p, -prompt <text>   Run a single prompt non-interactively and stream the
                        assistant reply to stdout, then exit.
   -debug               Enable verbose logging to stderr.
+  -v, -version         Print version and exit.
   -h, -help            Show this help.
 
 Authentication:
