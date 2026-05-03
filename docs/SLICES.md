@@ -6,7 +6,7 @@ The full V1 scope is in [`REQUIREMENTS.md`](./REQUIREMENTS.md); the architecture
 
 | Slice | Status | Outcome |
 |------:|--------|---------|
-| 1 | ✅ shipped on `dev` | `cogo -p "<prompt>"` runs end-to-end against Gemini |
+| 1 | ✅ shipped | `cogo -p "<prompt>"` runs end-to-end against Gemini |
 | 2 | next | `cogo` opens an interactive Bubble Tea TUI with streaming markdown |
 | 3 |  | Agent gains tools (file / shell / web) gated by the permission system |
 | 4 |  | Feature-complete V1 — MCP, skills, memory, slash commands, cost tracking, `cogo init` |

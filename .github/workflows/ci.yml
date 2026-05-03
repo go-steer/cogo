@@ -5,7 +5,7 @@ name: CI
 
 on:
   push:
-    branches: [main, dev]
+    branches: [main]
     paths-ignore: ['**/*.md']
   pull_request:
     branches: [main]
@@ -27,18 +27,10 @@ env:
 # dev/ci/presubmits/. The same script is what `dev/tools/ci` runs
 # locally, so a green local run is the same green run as remote CI.
 # Keep the wiring boring — logic lives in dev/tools/, not in YAML.
-#
-# `if: !skip-dev-pr` on every job: when a PR is opened from `dev` to
-# `main`, every job is skipped because the same HEAD SHA already has
-# green status checks from the `dev` push. Status checks are SHA-scoped,
-# so branch protection on `main` (which requires `test` / `lint` /
-# `tidy` / `vuln`) is satisfied by the checks already attached to that
-# SHA. PRs from feature branches or forks still run CI normally.
 
 jobs:
   test:
     name: test
-    if: github.event_name != 'pull_request' || github.head_ref != 'dev'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -78,7 +70,6 @@ jobs:
 
   lint:
     name: lint
-    if: github.event_name != 'pull_request' || github.head_ref != 'dev'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -102,7 +93,6 @@ jobs:
 
   tidy:
     name: go mod tidy is clean
-    if: github.event_name != 'pull_request' || github.head_ref != 'dev'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -115,7 +105,6 @@ jobs:
 
   vuln:
     name: govulncheck
-    if: github.event_name != 'pull_request' || github.head_ref != 'dev'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
