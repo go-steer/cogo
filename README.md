@@ -184,6 +184,9 @@ GOOGLE_CLOUD_LOCATION=... \
 
 ## Documentation
 
+- [`ROADMAP.md`](./ROADMAP.md) — release themes (v0.2.0 → v0.5.0) and links to the GitHub milestones.
+- [`CONTRIBUTING.md`](./CONTRIBUTING.md) — how to file issues, the PR workflow, DCO sign-off, commit conventions.
+- [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md) — Contributor Covenant v2.1.
 - [`docs/REQUIREMENTS.md`](./docs/REQUIREMENTS.md) — V1 scope, functional & non-functional requirements.
 - [`docs/DESIGN.md`](./docs/DESIGN.md) — architecture, configuration, module layout, testing strategy.
 - [`AGENTS.md`](./AGENTS.md) — project memory that `cogo` itself loads when run inside this repo.
