@@ -105,7 +105,19 @@ COGO_E2E=1 go test ./internal/headless/... -run E2E -v
 
 ## Status
 
-V1 in active development; all five slices have landed on `dev`.
-Current polish work (CI, goreleaser, schema-driven elicitation modal,
-MCP child-process cleanup on `/reload`) is enumerated in
-[`docs/SLICES.md`](./docs/SLICES.md) under Slice 5.
+V1 (`v0.1.0`) shipped. Future work is tracked by GitHub milestones
+`v0.2.0` through `v0.5.0`; see [`ROADMAP.md`](./ROADMAP.md) for the
+release themes and links to the milestones.
+
+## Branch workflow
+
+Single long-lived branch: `main`. Work happens on short-lived feature
+branches (`feat/...`, `fix/...`, `chore/...`, `docs/...`) → PR
+against `main` → rebase merge (the only PR merge style enabled).
+Branch protection on `main` requires the `test`, `lint`, `go mod tidy
+is clean`, and `govulncheck` status checks; docs-only PRs satisfy
+them via the companion `ci-docs.yml` workflow without running the
+full Go pipeline. Commits must be DCO-signed off (`git commit -s`)
+and follow Conventional Commits (the prefix drives the auto-generated
+release changelog). See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for
+the full contributor flow.
