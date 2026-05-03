@@ -18,14 +18,15 @@ For anything beyond a typo fix or one-line bug, open an issue first so we can ag
 
 ### Workflow
 
-1. Fork and branch from `dev` (not `main` — `main` is release-tagged HEAD).
+1. Fork and create a short-lived feature branch off `main` (e.g. `feat/plan-mode`, `fix/mcp-leak`, `docs/install-snippet`).
 2. Make your change. Keep the diff focused; unrelated cleanup belongs in a separate PR.
 3. Run the full local CI before pushing:
    ```bash
    dev/tools/ci
    ```
    This is the same script that runs in GitHub Actions — green locally means green remotely. See [`dev/README.md`](./dev/README.md) for the full layout and how to add new checks.
-4. Open the PR against `dev`. CI runs on the push; merging to `main` is done via release-cut PRs from `dev` and skips CI re-runs (the SHA already has green checks).
+4. Open the PR against `main`. CI runs on the PR; the four required status checks (`test`, `lint`, `go mod tidy is clean`, `govulncheck`) gate the merge. Docs-only PRs satisfy these checks via a companion no-op workflow without running the full Go pipeline.
+5. Merge with **Rebase and merge** (the only PR merge option enabled). `main` stays linear.
 
 ### Commit messages — Conventional Commits
 

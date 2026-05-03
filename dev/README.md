@@ -60,24 +60,23 @@ dev/
 That's it — the delegator pattern means the GitHub workflow never has
 to know what the check actually does.
 
-## CI on `dev` → `main` PRs
+## CI on PRs
 
-Pushing to `dev` runs the full CI pipeline. When you then open a PR
-from `dev` to `main`, the CI jobs are **skipped** — the same HEAD SHA
-already has green status checks from the `dev` push, and status checks
-are SHA-scoped, so branch protection on `main` is satisfied without
-re-running.
+Open a PR against `main` from a short-lived feature branch (e.g.
+`feat/plan-mode`, `fix/mcp-leak`). CI runs on the PR; merging is
+gated on the four required status checks.
 
 For this to actually gate merges, the repo's branch protection on
 `main` must require these checks (settings → branches → main):
 
 - `test`
 - `lint`
-- `tidy`
-- `vuln`
+- `go mod tidy is clean`
+- `govulncheck`
 
-PRs from feature branches or forks (any HEAD that isn't `dev`) still
-run CI normally.
+Docs-only PRs (`**/*.md`) are handled by the companion `ci-docs.yml`
+workflow, which emits the same four check names trivially-green so
+branch protection is satisfied without running the full Go pipeline.
 
 ## License headers
 
