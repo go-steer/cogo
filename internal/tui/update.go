@@ -275,7 +275,7 @@ func (m *Model) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	headerH := 1
 	inputH := m.textarea.Height() + 2 // border lines
 	footerH := 1
-	vpH := m.height - headerH - inputH - footerH
+	vpH := m.height - headerH - inputH - footerH - bottomPad
 	if vpH < 3 {
 		vpH = 3
 	}
