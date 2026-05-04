@@ -58,7 +58,8 @@ func DefaultStyles() Styles {
 			BorderForeground(border).
 			Padding(0, 1),
 		Spinner: lipgloss.NewStyle().
-			Foreground(accent),
+			Foreground(brandCyan).
+			Bold(true),
 		Footer: lipgloss.NewStyle().
 			Foreground(muted),
 		Confirm: lipgloss.NewStyle().

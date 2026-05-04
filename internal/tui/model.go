@@ -154,7 +154,7 @@ type Model struct {
 // Glamour's background-color query response to leak into the textarea.
 func NewModel(cfg *config.Config, a *agent.Agent, mdStyle string) *Model {
 	ta := textarea.New()
-	ta.Placeholder = "Type a message, or /help…"
+	ta.Placeholder = "Message · / for commands · @ for files…"
 	ta.ShowLineNumbers = false
 	ta.CharLimit = 0
 	ta.SetHeight(3)
@@ -235,9 +235,9 @@ func (m *Model) renderMessage(msg Message) string {
 		}
 		return text
 	case RoleSystem:
-		return m.styles.System.Render(msg.Display())
+		return m.styles.System.Render("ℹ  " + msg.Display())
 	case RoleError:
-		return m.styles.Error.Render(msg.Display())
+		return m.styles.Error.Render("⚠  " + msg.Display())
 	default:
 		return msg.Display()
 	}
