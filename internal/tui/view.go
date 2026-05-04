@@ -312,11 +312,13 @@ func shortDir(dir string) string {
 }
 
 // modeBadge styles the permission mode so "yolo" stands out — landing
-// in yolo without realizing it should be visually obvious.
+// in yolo without realizing it should be visually obvious. The yolo
+// label gets a leading ⚠ glyph so it's recognizable even on a quick
+// glance at the corner of the header.
 func modeBadge(mode string, st Styles) string {
 	switch mode {
 	case "yolo":
-		return st.Error.Render(mode)
+		return st.Error.Render("⚠ " + mode)
 	case "ask":
 		return st.HeaderAccent.Render(mode)
 	default:
