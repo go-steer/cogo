@@ -18,6 +18,7 @@ const (
 	SlashMCP     SlashAction = "mcp"
 	SlashSkills  SlashAction = "skills"
 	SlashReload  SlashAction = "reload"
+	SlashMouse   SlashAction = "mouse"
 	SlashUnknown SlashAction = "unknown"
 )
 
@@ -37,6 +38,7 @@ var slashAliases = map[string]SlashAction{
 	"mcp":    SlashMCP,
 	"skills": SlashSkills,
 	"reload": SlashReload,
+	"mouse":  SlashMouse,
 }
 
 // ParseSlash inspects input. If it looks like a slash command (leading
@@ -93,6 +95,7 @@ func HelpText() string {
 		"  /mcp        show configured MCP servers and their status",
 		"  /skills     show discovered skills",
 		"  /reload     re-read .agents/ from disk (mcp.json, skills/, AGENTS.md, config.json)",
+		"  /mouse      toggle mouse-wheel scrolling (or /mouse on|off)",
 		"",
 		"Keys:",
 		"  PgUp/PgDn   scroll chat history",
@@ -105,8 +108,14 @@ func HelpText() string {
 		"  Ctrl+L      reset viewport scroll (history preserved)",
 		"  Ctrl+U      clear the input box",
 		"",
-		"Mouse selection / copy / paste use your terminal's normal behavior.",
-		"",
-		"More commands (/model, /mcp, /skills, /memory, /stats) arrive in a later release.",
+		"Mouse: wheel scrolls the chat when capture is on (the default).",
+		"To select text while capture is on, hold your terminal's bypass",
+		"modifier while dragging:",
+		"  Shift   most Linux/Windows terminals, WezTerm, Alacritty, Kitty",
+		"  Option  iTerm2, Ghostty, VS Code's integrated terminal",
+		"  Fn      Apple Terminal.app",
+		"VS Code on macOS also needs `terminal.integrated.macOptionClickForcesSelection: true`",
+		"in settings.json before Option-drag will bypass capture.",
+		"Or run /mouse off to give plain drag back to the terminal.",
 	}, "\n")
 }

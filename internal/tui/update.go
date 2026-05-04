@@ -23,6 +23,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		return m.handleResize(msg)
+	case tea.MouseMsg:
+		// Forward only wheel events; everything else (clicks, drags,
+		// motion) is dropped so the input area and modals don't react
+		// to stray clicks. Shift-drag bypasses our capture at the
+		// terminal layer, so text selection still works.
+		if tea.MouseEvent(msg).IsWheel() {
+			var cmd tea.Cmd
+			m.viewport, cmd = m.viewport.Update(msg)
+			return m, cmd
+		}
+		return m, nil
 	case tea.KeyMsg:
 		// Elicit modal preempts everything (it can carry a free-text
 		// input that would otherwise eat slash commands).
@@ -616,6 +627,8 @@ func (m *Model) handleSlash(action SlashAction, cmd, args string) (tea.Model, te
 		return m, nil
 	case SlashReload:
 		return m.handleReload()
+	case SlashMouse:
+		return m.handleMouseCommand(args)
 	case SlashModel:
 		return m.handleModelCommand(args)
 	case SlashQuit:
@@ -649,6 +662,50 @@ func (m *Model) handleReload() (tea.Model, tea.Cmd) {
 	m.history.Append(Message{Role: RoleSystem, Text: "Reloaded .agents/ from disk. Memory + MCP servers + skills refreshed; chat history and usage totals preserved."})
 	m.refreshViewport()
 	return m, nil
+}
+
+// handleMouseCommand toggles mouse capture, or sets it explicitly when
+// the user passes "on"/"off". The change applies to the current session
+// only; persistence lives in `ui.mouse` in .agents/config.json.
+func (m *Model) handleMouseCommand(args string) (tea.Model, tea.Cmd) {
+	want := !m.mouseEnabled
+	switch strings.ToLower(strings.TrimSpace(args)) {
+	case "", "toggle":
+		// fall through with the flipped value
+	case "on", "true", "yes", "enable", "enabled":
+		want = true
+	case "off", "false", "no", "disable", "disabled":
+		want = false
+	default:
+		m.history.Append(Message{Role: RoleSystem, Text: fmt.Sprintf(
+			"Usage: /mouse [on|off]. Currently %s.", mouseStateLabel(m.mouseEnabled))})
+		m.refreshViewport()
+		return m, nil
+	}
+	if want == m.mouseEnabled {
+		m.history.Append(Message{Role: RoleSystem, Text: fmt.Sprintf(
+			"Mouse capture already %s.", mouseStateLabel(m.mouseEnabled))})
+		m.refreshViewport()
+		return m, nil
+	}
+	m.mouseEnabled = want
+	var teaCmd tea.Cmd
+	if want {
+		teaCmd = tea.EnableMouseCellMotion
+		m.history.Append(Message{Role: RoleSystem, Text: "Mouse capture on — wheel scrolls the chat. Hold Shift while dragging to select text."})
+	} else {
+		teaCmd = tea.DisableMouse
+		m.history.Append(Message{Role: RoleSystem, Text: "Mouse capture off — plain drag selects text. Use PgUp/PgDn to scroll."})
+	}
+	m.refreshViewport()
+	return m, teaCmd
+}
+
+func mouseStateLabel(on bool) string {
+	if on {
+		return "on"
+	}
+	return "off"
 }
 
 // handleModelCommand handles `/model` (no args → open picker) and

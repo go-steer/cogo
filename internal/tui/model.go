@@ -133,6 +133,11 @@ type Model struct {
 	// True when the user just hit Ctrl+C while idle once. Second press exits.
 	pendingExit bool
 
+	// mouseEnabled mirrors whether the program is currently capturing
+	// mouse events. Toggled by /mouse, which dispatches the matching
+	// tea.EnableMouseCellMotion / tea.DisableMouse command.
+	mouseEnabled bool
+
 	// AlwaysAllow is invoked when the user picks "always allow" in the
 	// permission modal. The host (TUI launcher) plugs in a function
 	// that persists the pattern to .agents/config.json. May be nil in

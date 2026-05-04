@@ -232,10 +232,16 @@ func Run(ctx context.Context, cfg *config.Config, agentsDir string) (int, error)
 		return appendPathScope(agentsDir, req.PersistKey)
 	}
 
-	// Note: deliberately NOT enabling tea.WithMouseCellMotion — capturing
-	// mouse events globally breaks terminal-native text selection (copy /
-	// paste) and makes mouse interaction in the input area feel wrong.
-	p := tea.NewProgram(m, tea.WithAltScreen())
+	// Mouse capture wires the wheel to viewport scrolling. Capturing
+	// mouse events also takes plain click-drag away from the terminal's
+	// native text selection, so users hold Shift to select. Disable via
+	// `ui.mouse: false` in config or /mouse off at runtime.
+	opts := []tea.ProgramOption{tea.WithAltScreen()}
+	m.mouseEnabled = cfg.UI.MouseEnabled()
+	if m.mouseEnabled {
+		opts = append(opts, tea.WithMouseCellMotion())
+	}
+	p := tea.NewProgram(m, opts...)
 	m.SetProgram(p)
 	prompter.(*tuiPrompter).send = p
 	elicitor.attach(p)

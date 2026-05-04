@@ -59,11 +59,11 @@ func DefaultKeyMap() KeyMap {
 		),
 		LineUp: key.NewBinding(
 			key.WithKeys("up"),
-			key.WithHelp("↑", "scroll up (when input empty)"),
+			key.WithHelp("↑", "recall previous prompt (when input empty)"),
 		),
 		LineDown: key.NewBinding(
 			key.WithKeys("down"),
-			key.WithHelp("↓", "scroll down (when input empty)"),
+			key.WithHelp("↓", "recall next prompt (when navigating history)"),
 		),
 		ConfirmAllowOnce: key.NewBinding(
 			key.WithKeys("y"),
