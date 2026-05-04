@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 func homeDir() string {
@@ -57,7 +58,14 @@ func (m *Model) View() string {
 		parts = append(parts, m.renderPalette())
 	}
 	parts = append(parts, input, footer)
-	parts = append(parts, strings.Repeat("\n", bottomPad))
+	// Append bottomPad EMPTY-STRING parts (not a newline string).
+	// JoinVertical splits each part on "\n" — feeding it "\n" yields
+	// two empty rows per newline, blowing the row budget by one and
+	// scrolling the header off the top of the alt-screen. An empty
+	// string contributes exactly one blank row, which is what we want.
+	for i := 0; i < bottomPad; i++ {
+		parts = append(parts, "")
+	}
 	return lipgloss.JoinVertical(lipgloss.Left, parts...)
 }
 
@@ -242,18 +250,50 @@ func (m *Model) renderHeader() string {
 	}
 	cwd := shortDir(m.projectRoot)
 
-	left := fmt.Sprintf("Cogo · %s", m.styles.HeaderAccent.Render(m.cfg.Model.Name))
-	right := fmt.Sprintf("%s · %s · %s", cwd, provider, modeBadge(mode, m.styles))
+	// Header layout: 1-char gutter on each edge + brand on the left +
+	// flexible gap + status on the right. Crucially the assembled line
+	// must end up EXACTLY m.width columns wide — one column over and
+	// the terminal wraps the row, which (because Bubble Tea's screen
+	// positioning assumes a single-row header) scrolls the whole header
+	// off the top of the alt-screen and the user opens the TUI to a
+	// missing header. The Header style has no Padding for the same
+	// reason: it would invisibly add 2 cols on top of our budget.
+	left := headerBrand()
+	// Build the right side incrementally, appending each segment only
+	// if it still fits. Model name is the floor — always shown.
+	const gutter = 1
+	budget := m.width - 2*gutter - lipgloss.Width(left) - 1 // -1 for min gap
+	right := m.styles.HeaderAccent.Render(m.cfg.Model.Name)
+	tryAppend := func(s string) {
+		if lipgloss.Width(right)+lipgloss.Width(s) <= budget {
+			right += s
+		}
+	}
+	// Order matters: append the security-critical mode badge before the
+	// nice-to-haves so a yolo/ask label is the last thing dropped on
+	// narrow terminals.
+	tryAppend(" · " + modeBadge(mode, m.styles))
+	tryAppend(" · " + cwd)
+	tryAppend(" · " + provider)
 	if m.usage != nil {
 		tot := m.usage.Totals()
-		right += fmt.Sprintf(" · σ ↑%d/↓%d/$%s",
-			tot.InputTokens, tot.OutputTokens, formatCost(tot.CostUSD))
+		tryAppend(fmt.Sprintf(" · σ ↑%d/↓%d/$%s",
+			tot.InputTokens, tot.OutputTokens, formatCost(tot.CostUSD)))
 	}
-	gap := m.width - lipgloss.Width(left) - lipgloss.Width(right)
+	gap := m.width - 2*gutter - lipgloss.Width(left) - lipgloss.Width(right)
 	if gap < 1 {
 		gap = 1
 	}
-	return m.styles.Header.Render(left + strings.Repeat(" ", gap) + right)
+	pad := strings.Repeat(" ", gutter)
+	line := pad + left + strings.Repeat(" ", gap) + right + pad
+	// Belt and suspenders: truncate if the math still produced a row
+	// wider than the terminal (e.g., a model name longer than the whole
+	// terminal width). ansi.Truncate is ANSI-aware so it doesn't break
+	// the styled brand spans.
+	if lipgloss.Width(line) > m.width {
+		line = ansi.Truncate(line, m.width, "…")
+	}
+	return m.styles.Header.Render(line)
 }
 
 // shortDir returns the basename of dir prefixed with "~/" when dir is
