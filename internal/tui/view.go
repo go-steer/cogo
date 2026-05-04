@@ -16,6 +16,12 @@ func homeDir() string {
 	return h
 }
 
+// bottomPad reserves blank rows at the bottom of the alt-screen so the
+// footer never sits flush against the terminal edge. handleResize
+// subtracts the same value from the viewport height so total content
+// still matches the screen.
+const bottomPad = 1
+
 // View renders the model as a single string. Layout (top to bottom):
 //
 //	Header
@@ -24,6 +30,7 @@ func homeDir() string {
 //	Input area (textarea inside a rounded border) — replaced by the
 //	  permission modal when a request is pending
 //	Footer (status hint or spinner)
+//	bottomPad blank rows (breathing room)
 func (m *Model) View() string {
 	if m.width == 0 || m.height == 0 {
 		// Pre-resize: avoid drawing into 0×0.
@@ -50,6 +57,7 @@ func (m *Model) View() string {
 		parts = append(parts, m.renderPalette())
 	}
 	parts = append(parts, input, footer)
+	parts = append(parts, strings.Repeat("\n", bottomPad))
 	return lipgloss.JoinVertical(lipgloss.Left, parts...)
 }
 
