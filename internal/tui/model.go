@@ -200,10 +200,13 @@ func (m *Model) Init() tea.Cmd {
 }
 
 // renderHistory builds the viewport contents from the current history.
-// One block per message, separated by blank lines.
+// One block per message, separated by blank lines. With no messages
+// yet, an empty-state hint stands in so the viewport isn't blank on
+// first launch — the brand wordmark already lives in the persistent
+// header above, so no banner is needed here.
 func (m *Model) renderHistory() string {
 	if m.history.Len() == 0 {
-		return m.styles.System.Render("Type a message and hit Enter. /help for commands, /quit to exit.")
+		return emptyStateHint()
 	}
 	msgs := m.history.Snapshot()
 	parts := make([]string, 0, len(msgs))

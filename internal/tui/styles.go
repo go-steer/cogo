@@ -36,8 +36,7 @@ func DefaultStyles() Styles {
 
 	return Styles{
 		Header: lipgloss.NewStyle().
-			Foreground(muted).
-			Padding(0, 1),
+			Foreground(muted),
 		HeaderAccent: lipgloss.NewStyle().
 			Foreground(accent).
 			Bold(true),
