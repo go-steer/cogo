@@ -162,8 +162,10 @@ func NewModel(cfg *config.Config, a *agent.Agent, mdStyle string) *Model {
 
 	vp := viewport.New(0, 0)
 
+	styles := DefaultStyles()
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
+	sp.Style = styles.Spinner
 
 	md, _ := NewMarkdownRenderer(80, mdStyle) // tightened on first WindowSizeMsg
 
@@ -176,7 +178,7 @@ func NewModel(cfg *config.Config, a *agent.Agent, mdStyle string) *Model {
 		viewport:            vp,
 		spinner:             sp,
 		keys:                DefaultKeyMap(),
-		styles:              DefaultStyles(),
+		styles:              styles,
 		md:                  md,
 		mdStyle:             mdStyle,
 		state:               StateIdle,

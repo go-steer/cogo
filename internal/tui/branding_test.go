@@ -63,6 +63,25 @@ func TestView_HeaderAlwaysShowsBrandAndStatus(t *testing.T) {
 	}
 }
 
+// TestSpinner_UsesBrandStyle pins the spinner-style wiring. The
+// Styles.Spinner field exists for a reason: the streaming spinner
+// glyph should render in brand cyan + bold, not bubble's default
+// foreground. The bug was that we defined Styles.Spinner but never
+// assigned it to spinner.Model.Style, so spinner.View() always
+// rendered with the default style. DO NOT silence this test —
+// failure means the spinner regressed to default colors and users
+// stop seeing the brand affordance during streaming.
+func TestSpinner_UsesBrandStyle(t *testing.T) {
+	t.Parallel()
+	cfg := config.DefaultConfig()
+	m := NewModel(cfg, nil, "dark")
+	want := DefaultStyles().Spinner
+	if m.spinner.Style.String() != want.String() {
+		t.Errorf("spinner.Style not wired to Styles.Spinner; got %v want %v",
+			m.spinner.Style, want)
+	}
+}
+
 // TestHeaderBrand_NoControlCharLeaks guards against the cursor block
 // or other styled spans emitting stray newlines into the brand line.
 // A newline inside headerBrand silently breaks the JoinHorizontal in

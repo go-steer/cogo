@@ -741,6 +741,17 @@ func (m *Model) switchModel(modelID string) (tea.Model, tea.Cmd) {
 		m.refreshViewport()
 		return m, nil
 	}
+	// Reject unknown model IDs up front — the provider builds the model
+	// lazily, so without this check `/model bogus` looks like it
+	// succeeded and only fails on the next prompt with an opaque
+	// API 400. Listing the candidates makes the failure actionable.
+	if indexOfModel(modelID) < 0 {
+		m.history.Append(Message{Role: RoleError, Text: fmt.Sprintf(
+			"Unknown model %q. Try one of: %s",
+			modelID, strings.Join(availableModels(), ", "))})
+		m.refreshViewport()
+		return m, nil
+	}
 	newAgent, err := m.rebuildAgent(modelID)
 	if err != nil {
 		m.history.Append(Message{Role: RoleError, Text: "Switch failed: " + err.Error()})
