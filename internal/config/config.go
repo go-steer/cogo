@@ -105,6 +105,22 @@ type OTELConfig struct {
 // UIConfig holds Bubble Tea presentation choices. Activated in Slice 2.
 type UIConfig struct {
 	Theme string `json:"theme,omitempty"` // "auto" | "light" | "dark"
+
+	// Mouse enables terminal mouse capture so the wheel scrolls the
+	// chat viewport. When enabled, plain click-drag no longer selects
+	// text — terminals route around the capture when Shift is held
+	// (Shift-drag to select, copy as usual). Pointer so unset means
+	// "use the default" (true). Toggle at runtime with /mouse.
+	Mouse *bool `json:"mouse,omitempty"`
+}
+
+// MouseEnabled reports whether mouse capture should be on at startup.
+// Defaults to true when the field is unset.
+func (u UIConfig) MouseEnabled() bool {
+	if u.Mouse == nil {
+		return true
+	}
+	return *u.Mouse
 }
 
 // Permission modes.

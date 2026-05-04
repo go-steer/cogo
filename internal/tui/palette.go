@@ -60,6 +60,7 @@ func allSlashItems() []paletteItem {
 		{Display: "/mcp", Value: "/mcp", Hint: "configured MCP servers + status"},
 		{Display: "/skills", Value: "/skills", Hint: "discovered skill bundles"},
 		{Display: "/reload", Value: "/reload", Hint: "re-read .agents/ from disk"},
+		{Display: "/mouse", Value: "/mouse", Hint: "toggle mouse-wheel scrolling"},
 		{Display: "/clear", Value: "/clear", Hint: "clear chat history"},
 		{Display: "/quit", Value: "/quit", Hint: "exit Cogo"},
 	}

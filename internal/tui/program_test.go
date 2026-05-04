@@ -91,8 +91,8 @@ func TestProgram_HelpCommandShowsHelp(t *testing.T) {
 	// the viewport autoscrolls to the latest message, so anything near
 	// the start ("Slash commands:") may not be in the visible window.
 	teatest.WaitFor(t, tm.Output(), func(out []byte) bool {
-		return bytes.Contains(out, []byte("Mouse selection")) ||
-			bytes.Contains(out, []byte("More commands"))
+		return bytes.Contains(out, []byte("Hold Shift while dragging")) ||
+			bytes.Contains(out, []byte("wheel scrolls the chat"))
 	}, teatest.WithDuration(2*time.Second))
 
 	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
