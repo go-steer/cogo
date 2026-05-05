@@ -337,15 +337,13 @@ func (m *Model) renderFooter() string {
 	case m.pendingConfirm != nil:
 		return m.styles.Footer.Render("Permission required — choose one of the keys above")
 	case m.state == StateStreaming:
-		// Render the brand-cyan parts (spinner glyph + "Thinking...") as
-		// SEPARATE Render() calls and concatenate. Wrapping them in a
-		// single brand.Render() is wrong: the spinner's own styled
-		// output already ends with a `\x1b[0m` reset, which cancels the
-		// outer brand wrap and leaves "Thinking..." in default color
-		// (the bug users reported as "Thinking is no longer cyan").
-		brand := lipgloss.NewStyle().Foreground(brandCyan).Bold(true)
-		return m.spinner.View() + " " + brand.Render("Thinking...") + " " +
-			m.styles.Footer.Render("(Ctrl+C to cancel)")
+		// Plain footer string. Earlier attempts to brand-cyan the
+		// "Thinking..." word reported "no Thinking in the footer" on
+		// VS Code's integrated terminal; the styled multi-span line was
+		// breaking the bubble tea renderer's diff on that host. Until
+		// we understand the host bug, fall back to a single Footer
+		// wrap with no nested styles.
+		return m.styles.Footer.Render(m.spinner.View() + " Thinking... (Ctrl+C to cancel)")
 	case m.confirmingClear:
 		return m.styles.Confirm.Render("Confirm clear: type y / yes / anything else")
 	default:
