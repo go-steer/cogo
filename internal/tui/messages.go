@@ -28,6 +28,16 @@ type streamChunkMsg struct {
 	Text string
 }
 
+// toolCallMsg is emitted by the agent goroutine when the model decides
+// to invoke a tool. The TUI renders a one-line summary in the chat so
+// the user can see the agent's actions interleaved with its prose.
+// Args is the raw key/value map from the model; the renderer pulls a
+// brief summary out of it (the bash command, the file path, etc.).
+type toolCallMsg struct {
+	Name string
+	Args map[string]any
+}
+
 // turnDoneMsg signals the agent has finished the current turn cleanly.
 // The TUI uses this to flip state back to idle and to apply the Glamour
 // re-render to the in-progress assistant message.

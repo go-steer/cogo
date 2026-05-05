@@ -103,6 +103,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, textinput.Blink
 	case streamChunkMsg:
 		return m.handleStreamChunk(msg)
+	case toolCallMsg:
+		// Append the tool call as its own history entry. The chat renders
+		// it with the ⚙ icon + accent style so the user sees the agent's
+		// actions interleaved with its prose. The thinking-indicator
+		// placeholder is left alone — it gives way to the next text
+		// chunk on its own.
+		m.history.Append(Message{Role: RoleTool, Text: formatToolCall(msg.Name, msg.Args)})
+		m.refreshViewport()
+		return m, nil
 	case usageMsg:
 		if m.usage != nil {
 			pricing := usage.PriceFor(m.cfg.Model.Name, m.cfg)

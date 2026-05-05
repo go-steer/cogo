@@ -43,7 +43,22 @@ func startAgentTurn(ctx context.Context, send programSender, a *agent.Agent, pro
 				lastIn = int(event.UsageMetadata.PromptTokenCount)
 				lastOut = int(event.UsageMetadata.CandidatesTokenCount)
 			}
-			if event.Content == nil || !event.Partial {
+			if event.Content == nil {
+				continue
+			}
+			// Tool invocations arrive on non-Partial events with a
+			// FunctionCall part. Surface each one to the chat as its
+			// own line so the user sees the agent's actions
+			// interleaved with the streaming prose.
+			for _, p := range event.Content.Parts {
+				if p.FunctionCall != nil && p.FunctionCall.Name != "" {
+					send.Send(toolCallMsg{
+						Name: p.FunctionCall.Name,
+						Args: p.FunctionCall.Args,
+					})
+				}
+			}
+			if !event.Partial {
 				continue
 			}
 			for _, p := range event.Content.Parts {
