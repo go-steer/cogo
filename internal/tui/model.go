@@ -216,14 +216,24 @@ func (m *Model) Init() tea.Cmd {
 // yet, an empty-state hint stands in so the viewport isn't blank on
 // first launch — the brand wordmark already lives in the persistent
 // header above, so no banner is needed here.
+//
+// During a streaming turn, the rotating "Thinking…" indicator is
+// appended at the very end whenever the agent is between segments —
+// either before any chunk has arrived, or after a tool call closed
+// the previous segment and the next chunk hasn't landed yet. The
+// indicator therefore always stays at the bottom of the chat as new
+// tool calls and assistant segments scroll past it.
 func (m *Model) renderHistory() string {
 	if m.history.Len() == 0 {
 		return emptyStateHint()
 	}
 	msgs := m.history.Snapshot()
-	parts := make([]string, 0, len(msgs))
+	parts := make([]string, 0, len(msgs)+1)
 	for _, msg := range msgs {
 		parts = append(parts, m.renderMessage(msg))
+	}
+	if m.state == StateStreaming && m.currentAssistantIdx < 0 {
+		parts = append(parts, m.renderThinkingLine())
 	}
 	return strings.Join(parts, "\n\n")
 }
@@ -239,17 +249,11 @@ func (m *Model) renderMessage(msg Message) string {
 		return prefix + " " + m.styles.UserText.Render(wrapped)
 	case RoleAssistant:
 		// Display() prefers the Glamour-rendered form when available;
-		// during streaming it falls back to raw text.
+		// during streaming it falls back to raw text. The thinking
+		// indicator no longer renders here — renderHistory appends it
+		// at the bottom of the chat when the agent is between segments.
 		text := msg.Display()
 		if msg.Rendered == "" {
-			// While streaming hasn't produced any chunks yet, show the
-			// rotating "Thinking…" indicator below the user's prompt
-			// so the wait is visible without scrolling to the footer.
-			// Once the first chunk lands, the indicator gives way to
-			// the actual response text.
-			if m.state == StateStreaming && text == "" {
-				return m.renderThinkingLine()
-			}
 			// Streaming: wrap raw text at viewport width so long
 			// chunks don't overflow before Glamour gets to re-render
 			// the finalized message.
