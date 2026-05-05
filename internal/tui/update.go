@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/spinner"
@@ -17,6 +18,20 @@ import (
 	"github.com/go-steer/cogo/internal/permissions"
 	"github.com/go-steer/cogo/internal/usage"
 )
+
+// thinkingTickMsg fires on a timer while a turn is in flight so the
+// in-chat "Thinking…" indicator can rotate to the next phrase. The
+// scheduler reschedules itself only while StateStreaming, so no
+// background CPU is spent when the TUI is idle.
+type thinkingTickMsg struct{}
+
+// thinkingTickCmd returns a tea.Cmd that emits a thinkingTickMsg after
+// thinkingTickInterval milliseconds.
+func thinkingTickCmd() tea.Cmd {
+	return tea.Tick(time.Duration(thinkingTickInterval)*time.Millisecond, func(time.Time) tea.Msg {
+		return thinkingTickMsg{}
+	})
+}
 
 // Update is Cogo's central message dispatch.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -108,6 +123,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
+	case thinkingTickMsg:
+		// Drop the tick if the turn finished mid-flight. Otherwise
+		// rotate to the next phrase, redraw, and reschedule.
+		if m.state != StateStreaming {
+			return m, nil
+		}
+		m.thinkingIdx++
+		m.refreshViewport()
+		return m, thinkingTickCmd()
 	}
 	// Unhandled — forward typing/etc. to the textarea.
 	var cmd tea.Cmd
@@ -589,13 +613,16 @@ func (m *Model) handleSubmit() (tea.Model, tea.Cmd) {
 	idx := m.history.Append(Message{Role: RoleAssistant})
 	m.currentAssistantIdx = idx
 	m.state = StateStreaming
+	// Reset the thinking-phrase rotator so every turn starts on the
+	// anchor phrase ("Thinking…") and the cycle is predictable.
+	m.thinkingIdx = 0
 
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancelTurn = cancel
 	startAgentTurn(ctx, m.program, m.agent, expanded)
 
 	m.refreshViewport()
-	return m, m.spinner.Tick
+	return m, tea.Batch(m.spinner.Tick, thinkingTickCmd())
 }
 
 func (m *Model) handleSlash(action SlashAction, cmd, args string) (tea.Model, tea.Cmd) {

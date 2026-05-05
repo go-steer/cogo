@@ -138,6 +138,14 @@ type Model struct {
 	// tea.EnableMouseCellMotion / tea.DisableMouse command.
 	mouseEnabled bool
 
+	// thinkingIdx selects which entry of thinkingPhrases is currently
+	// flashing in the chat while we wait for the model. A thinkingTick
+	// scheduler in update.go bumps the index on each tick; renderMessage
+	// reads it when the in-progress assistant message has no chunks yet.
+	// Ignored entirely outside StateStreaming, so the rotator costs
+	// nothing when the TUI is idle.
+	thinkingIdx int
+
 	// AlwaysAllow is invoked when the user picks "always allow" in the
 	// permission modal. The host (TUI launcher) plugs in a function
 	// that persists the pattern to .agents/config.json. May be nil in
@@ -228,6 +236,14 @@ func (m *Model) renderMessage(msg Message) string {
 		// during streaming it falls back to raw text.
 		text := msg.Display()
 		if msg.Rendered == "" {
+			// While streaming hasn't produced any chunks yet, show the
+			// rotating "Thinking…" indicator below the user's prompt
+			// so the wait is visible without scrolling to the footer.
+			// Once the first chunk lands, the indicator gives way to
+			// the actual response text.
+			if m.state == StateStreaming && text == "" {
+				return m.renderThinkingLine()
+			}
 			// Streaming: render raw with the assistant style for color.
 			return m.styles.Assistant.Render(text)
 		}
