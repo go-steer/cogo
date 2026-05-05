@@ -16,10 +16,10 @@ import (
 
 // TestThinkingPhrase_WrapsAndAnchors pins two contracts at once:
 //
-//   - thinkingPhrase(0) MUST return the anchor phrase ("Thinking…")
+//   - thinkingPhrase(0) MUST return the anchor phrase ("Thinking...")
 //     so every turn begins with the unambiguous indicator before the
 //     cheeky rotator wanders into the AI / sci-fi / CS jokes. Users
-//     who don't get the joke still see "Thinking…" first.
+//     who don't get the joke still see "Thinking..." first.
 //   - thinkingPhrase wraps cleanly past the end of the slice so the
 //     rotator never panics on long-running turns.
 //
@@ -29,8 +29,8 @@ import (
 // long turn, which is exactly when users most need the indicator.
 func TestThinkingPhrase_WrapsAndAnchors(t *testing.T) {
 	t.Parallel()
-	if got := thinkingPhrase(0); got != "Thinking…" {
-		t.Errorf("thinkingPhrase(0) = %q, want anchor %q", got, "Thinking…")
+	if got := thinkingPhrase(0); got != "Thinking..." {
+		t.Errorf("thinkingPhrase(0) = %q, want anchor %q", got, "Thinking...")
 	}
 	n := len(thinkingPhrases)
 	if got, want := thinkingPhrase(n), thinkingPhrases[0]; got != want {
@@ -68,11 +68,11 @@ func TestRenderMessage_StreamingPlaceholderShowsThinking(t *testing.T) {
 	m.refreshViewport()
 
 	// View() output covers header + viewport + input + footer; the
-	// footer ALSO says "Thinking…" in streaming mode, so we can't
+	// footer ALSO says "Thinking..." in streaming mode, so we can't
 	// just grep the whole frame for that token. Pull the viewport
 	// region directly to assert the chat-window indicator.
 	body := stripANSI(m.viewport.View())
-	if !strings.Contains(body, "Thinking…") {
+	if !strings.Contains(body, "Thinking...") {
 		t.Errorf("expected anchor phrase 'Thinking…' in viewport while streaming; got:\n%s", body)
 	}
 
@@ -88,7 +88,7 @@ func TestRenderMessage_StreamingPlaceholderShowsThinking(t *testing.T) {
 	m.history.AppendText(1, "actual response text")
 	m.refreshViewport()
 	body = stripANSI(m.viewport.View())
-	if strings.Contains(body, "Thinking…") || strings.Contains(body, thinkingPhrases[1]) {
+	if strings.Contains(body, "Thinking...") || strings.Contains(body, thinkingPhrases[1]) {
 		t.Errorf("thinking indicator should be hidden once the assistant message has content; got:\n%s", body)
 	}
 	if !strings.Contains(body, "actual response text") {
@@ -128,15 +128,69 @@ func TestRenderThinkingLine_NoItalic(t *testing.T) {
 		}
 	}
 	// Sanity: the phrase still has to be in there.
-	if !strings.Contains(stripANSI(out), "Thinking…") {
+	if !strings.Contains(stripANSI(out), "Thinking...") {
 		t.Errorf("renderThinkingLine() lost the phrase; got: %q", out)
+	}
+}
+
+// TestThinkingPhrases_AsciiOnly pins two related contracts:
+//
+//  1. Every phrase ends in literal "..." (three ASCII dots), not the
+//     Unicode ellipsis "…" (U+2026). Reported in dogfood: VS Code's
+//     terminal silently rendered "…" as zero-width on the user's font,
+//     making the phrase look truncated.
+//  2. No phrase contains non-ASCII characters at all. Same reason —
+//     fancy glyphs are gambling against the user's installed font.
+//
+// DO NOT silence this test if it breaks. Re-introducing "…" or a
+// stylized prefix glyph hides the indicator on a non-trivial slice of
+// terminals and brings back the "I see nothing" bug.
+func TestThinkingPhrases_AsciiOnly(t *testing.T) {
+	t.Parallel()
+	for i, p := range thinkingPhrases {
+		if !strings.HasSuffix(p, "...") {
+			t.Errorf("phrase[%d] = %q; must end in ASCII '...' not Unicode '…'", i, p)
+		}
+		for _, r := range p {
+			if r > 127 {
+				t.Errorf("phrase[%d] = %q contains non-ASCII rune %q (U+%04X); use ASCII only for portability", i, p, r, r)
+			}
+		}
+	}
+}
+
+// TestRenderFooter_ThinkingIsCyan pins the footer-color contract: the
+// "Thinking..." word in the footer (during streaming) MUST emit the
+// brand-cyan SGR. The bug: wrapping `spinner.View() + " Thinking..."`
+// in a brand.Render() looked correct in code but the spinner's inner
+// `\x1b[0m` reset cancelled the outer wrap, leaving "Thinking..." in
+// default terminal color.
+//
+// DO NOT silence this test — failure means the footer affordance lost
+// the brand color, which users notice and complain about.
+func TestRenderFooter_ThinkingIsCyan(t *testing.T) {
+	prev := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	defer lipgloss.SetColorProfile(prev)
+
+	cfg := config.DefaultConfig()
+	m := NewModel(cfg, nil, "dark")
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 24})
+	m.state = StateStreaming
+	out := m.renderFooter()
+	// The brand cyan span around "Thinking..." should look like
+	// `\x1b[1;38;2;0;255;255mThinking...\x1b[0m`. Search for the cyan
+	// SGR open immediately preceding the literal phrase.
+	cyanThinking := "\x1b[1;38;2;0;255;255mThinking..."
+	if !strings.Contains(out, cyanThinking) {
+		t.Errorf("footer 'Thinking...' is not wrapped in brand-cyan bold SGR.\nwanted substring: %q\ngot: %q", cyanThinking, out)
 	}
 }
 
 // TestRenderMessage_IdleAssistantNoThinking guards against the inverse
 // regression: when the agent is idle (e.g. a stale assistant message
 // whose render somehow gets re-evaluated), the thinking indicator must
-// NOT appear. Otherwise users see "Thinking…" forever after a turn
+// NOT appear. Otherwise users see "Thinking..." forever after a turn
 // finishes — worse than no indicator at all.
 func TestRenderMessage_IdleAssistantNoThinking(t *testing.T) {
 	t.Parallel()
@@ -149,7 +203,7 @@ func TestRenderMessage_IdleAssistantNoThinking(t *testing.T) {
 	m.refreshViewport()
 
 	body := stripANSI(m.viewport.View())
-	if strings.Contains(body, "Thinking…") {
+	if strings.Contains(body, "Thinking...") {
 		t.Errorf("thinking indicator should NOT appear in chat while idle; got:\n%s", body)
 	}
 }
