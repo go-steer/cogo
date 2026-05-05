@@ -264,9 +264,81 @@ func (m *Model) renderMessage(msg Message) string {
 		return m.styles.System.Render(wrapForChat("ℹ  "+msg.Display(), m.viewport.Width, "   "))
 	case RoleError:
 		return m.styles.Error.Render(wrapForChat("⚠  "+msg.Display(), m.viewport.Width, "   "))
+	case RoleTool:
+		// Tool lines render the icon + name in the bold-accent style
+		// (matches the model name in the header — proven stable on
+		// every host we test). The arg summary, if any, is already
+		// embedded in msg.Text as a "· " separated suffix; both spans
+		// are wrapped at viewport width with continuation indent
+		// past the "⚙ " prefix.
+		return m.styles.HeaderAccent.Render(wrapForChat("⚙  "+msg.Display(), m.viewport.Width, "   "))
 	default:
 		return msg.Display()
 	}
+}
+
+// formatToolCall renders a one-line summary of a tool invocation for
+// the chat: just the tool name when no useful arg is available, or
+// `name · <hint>` when we can pull a recognizable hint out of args.
+// We deliberately keep it single-line and short — the chat is for the
+// human to glance at the agent's actions, not for full audit trails.
+func formatToolCall(name string, args map[string]any) string {
+	hint := toolArgHint(name, args)
+	if hint == "" {
+		return name
+	}
+	// Cap the hint so a giant inline file or 4 KB bash command can't
+	// blow out a single chat row. Wrap will still shorten it further
+	// if the viewport is narrow; this is an absolute upper bound.
+	const maxHint = 200
+	if len(hint) > maxHint {
+		hint = hint[:maxHint] + "…"
+	}
+	return name + " · " + hint
+}
+
+// toolArgHint extracts the most useful one-line hint from a tool's
+// argument map. Recognizes the common cogo built-in tools by name; for
+// anything else it returns "" so the line stays as just the tool name.
+// Adding new tools here is cheap; not adding them is harmless.
+func toolArgHint(name string, args map[string]any) string {
+	if args == nil {
+		return ""
+	}
+	pick := func(keys ...string) string {
+		for _, k := range keys {
+			if v, ok := args[k]; ok {
+				if s, ok := v.(string); ok && s != "" {
+					return s
+				}
+			}
+		}
+		return ""
+	}
+	switch name {
+	case "bash":
+		if cmd := pick("command", "cmd"); cmd != "" {
+			return "$ " + strings.ReplaceAll(strings.ReplaceAll(cmd, "\n", " "), "\t", " ")
+		}
+	case "read_file":
+		return pick("path", "file", "filename")
+	case "write_file":
+		return pick("path", "file", "filename")
+	case "grep":
+		pattern := pick("pattern", "query")
+		path := pick("path", "dir")
+		switch {
+		case pattern != "" && path != "":
+			return strconv.Quote(pattern) + " in " + path
+		case pattern != "":
+			return strconv.Quote(pattern)
+		case path != "":
+			return path
+		}
+	case "list_files", "ls":
+		return pick("path", "dir")
+	}
+	return ""
 }
 
 // wrapForChat word-wraps text to fit inside a chat line of the given

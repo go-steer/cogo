@@ -16,6 +16,7 @@ const (
 	RoleAssistant             // model output (raw markdown)
 	RoleSystem                // notices like "/clear", "/help" output
 	RoleError                 // unrecoverable error from a turn
+	RoleTool                  // a tool invocation made by the agent (display-only)
 )
 
 // Message is one entry in the chat history.
