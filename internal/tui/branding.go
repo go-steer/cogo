@@ -7,32 +7,34 @@ import "github.com/charmbracelet/lipgloss"
 
 // Brand colors. Fixed hex (not AdaptiveColor) because the wordmark is
 // brand identity and shouldn't shift between light/dark terminals.
-// brandEye (deep cyan for the inner 'o') and brandGreen (highlight
-// for "go" / cursor block) were retired with the brand-header
-// simplification — see headerBrand for context.
 var (
 	brandCyan  = lipgloss.Color("#00FFFF")
+	brandEye   = lipgloss.Color("#00CED1") // deeper cyan for the inner 'o'
+	brandGreen = lipgloss.Color("#A7FF00")
 	brandSlate = lipgloss.Color("#6272A4")
 )
 
 // headerBrand renders the persistent brand line shown on the left of
-// the status header: `go-steer / c[o]go █`.
+// the status header: `go-steer / c[o]go █`. The headline is short
+// enough to fit on the same row as the status info on any reasonable
+// terminal width, so we don't waste a viewport row on a separate
+// banner.
 //
-// Originally this rendered each colored slice as its own lipgloss
-// span (slate "go-steer / ", bold-cyan "c", "[", deep-cyan "o",
-// bold-cyan "]", green "go", green "█"). That produced ~7 SGR
-// open/close pairs per render — fine on most terminals but reported
-// to correlate with rendering glitches on the user's VS Code host
-// (random capital letters disappearing, traced to malformed CSI
-// sequences). Collapsing to two styled spans (slate prefix + bold-
-// cyan brand mark) cuts the SGR density without losing the wordmark.
-// We trade the green "go" / deep-cyan inner "o" highlights for
-// stability; that's a worthwhile swap until the host renderer is
-// happier with denser ANSI.
+// Each colored slice is its own lipgloss span. We tried collapsing to
+// a single bold-cyan span over "c[o]go █" as a mitigation for an
+// unrelated "missing characters" report, and that made the brand
+// itself drop characters on the user's host — the dense per-letter
+// styling actually renders correctly there, the simplified single-
+// span did not. Keep the multi-span layout; the missing-chars issue
+// is something else entirely.
 func headerBrand() string {
-	prefix := lipgloss.NewStyle().Foreground(brandSlate).Render("go-steer / ")
-	mark := lipgloss.NewStyle().Foreground(brandCyan).Bold(true).Render("c[o]go █")
-	return prefix + mark
+	bracket := lipgloss.NewStyle().Foreground(brandCyan).Bold(true)
+	c := lipgloss.NewStyle().Foreground(brandCyan).Bold(true).Render("c")
+	o := lipgloss.NewStyle().Foreground(brandEye).Bold(true).Render("o")
+	g := lipgloss.NewStyle().Foreground(brandGreen).Render("go")
+	cursor := lipgloss.NewStyle().Foreground(brandGreen).Bold(true).Render("█")
+	org := lipgloss.NewStyle().Foreground(brandSlate).Render("go-steer / ")
+	return org + c + bracket.Render("[") + o + bracket.Render("]") + g + " " + cursor
 }
 
 // emptyStateHint is shown inside the viewport when the chat history is
