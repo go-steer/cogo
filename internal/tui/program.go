@@ -232,6 +232,16 @@ func Run(ctx context.Context, cfg *config.Config, agentsDir string) (int, error)
 		return appendPathScope(agentsDir, req.PersistKey)
 	}
 
+	// Wire the gate's session approval log + the .agents/config.json
+	// persistence path so the /permissions slash command can review
+	// approvals and persist recommended allowlist entries.
+	m.SessionApprovals = gate.Approvals
+	if agentsDir != "" {
+		m.PersistAllowPatterns = func(patterns []string) error {
+			return appendPermissionsAllow(agentsDir, patterns)
+		}
+	}
+
 	// Mouse capture wires the wheel to viewport scrolling. Capturing
 	// mouse events also takes plain click-drag away from the terminal's
 	// native text selection, so users hold Shift to select. Disable via
@@ -325,5 +335,28 @@ func appendPathScope(agentsDir, pattern string) error {
 		}
 	}
 	cfg.PathScope.Allow = append(cfg.PathScope.Allow, pattern)
+	return config.Save(filepath.Join(agentsDir, config.ConfigFileName), cfg)
+}
+
+// appendPermissionsAllow adds one or more patterns to
+// .agents/config.json's permissions.allow list. Idempotent — duplicate
+// patterns are skipped silently so /permissions can be re-run without
+// growing the config file.
+func appendPermissionsAllow(agentsDir string, patterns []string) error {
+	cfg, err := config.Load(agentsDir)
+	if err != nil {
+		return err
+	}
+	existing := make(map[string]bool, len(cfg.Permissions.Allow))
+	for _, p := range cfg.Permissions.Allow {
+		existing[p] = true
+	}
+	for _, p := range patterns {
+		if existing[p] {
+			continue
+		}
+		cfg.Permissions.Allow = append(cfg.Permissions.Allow, p)
+		existing[p] = true
+	}
 	return config.Save(filepath.Join(agentsDir, config.ConfigFileName), cfg)
 }

@@ -48,6 +48,8 @@ func (m *Model) View() string {
 		input = m.renderConfirmModal()
 	case m.modelPicker != nil:
 		input = m.renderModelPicker()
+	case m.permissionsPicker != nil:
+		input = m.renderPermissionsPicker()
 	default:
 		input = m.renderInput()
 	}

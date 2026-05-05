@@ -61,6 +61,7 @@ func allSlashItems() []paletteItem {
 		{Display: "/skills", Value: "/skills", Hint: "discovered skill bundles"},
 		{Display: "/reload", Value: "/reload", Hint: "re-read .agents/ from disk"},
 		{Display: "/mouse", Value: "/mouse", Hint: "toggle mouse-wheel scrolling"},
+		{Display: "/permissions", Value: "/permissions", Hint: "review approvals + persist recommended allowlist"},
 		{Display: "/clear", Value: "/clear", Hint: "clear chat history"},
 		{Display: "/quit", Value: "/quit", Hint: "exit Cogo"},
 	}
