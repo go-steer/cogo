@@ -42,36 +42,33 @@ func TestThinkingPhrase_WrapsAndAnchors(t *testing.T) {
 	}
 }
 
-// TestRenderMessage_StreamingPlaceholderShowsThinking pins the chat
-// indicator contract: while the assistant placeholder has no text yet
-// AND the model is in StateStreaming, the assistant slot in the chat
-// must render the rotating thinking indicator (not a blank line).
+// TestRenderMessage_StreamingShowsThinkingBetweenSegments pins the
+// chat indicator contract: while the model is in StateStreaming AND
+// the agent is between assistant segments (no in-progress message
+// yet, OR a tool call just closed the previous segment), the chat
+// MUST render the rotating thinking indicator at the bottom.
 //
 // DO NOT silence this test if it breaks. A failure means the user
-// sends a prompt and stares at an empty space until the first chunk
-// streams in — the exact "is anything happening?" UX gap this feature
-// closes. If the rendering path legitimately changes, replace the
-// assertion with one that proves the new path still surfaces the
-// indicator below the user's prompt; never delete the contract.
-func TestRenderMessage_StreamingPlaceholderShowsThinking(t *testing.T) {
+// sends a prompt (or watches a tool call resolve) and stares at an
+// empty space until the next chunk arrives — the exact "is anything
+// happening?" UX gap this feature closes.
+func TestRenderMessage_StreamingShowsThinkingBetweenSegments(t *testing.T) {
 	t.Parallel()
 	cfg := config.DefaultConfig()
 	m := NewModel(cfg, nil, "dark")
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 24})
 	m.history.Append(Message{Role: RoleUser, Text: "hello"})
-	m.history.Append(Message{Role: RoleAssistant}) // empty placeholder
-	m.currentAssistantIdx = 1
+	m.currentAssistantIdx = -1 // no in-progress assistant
 	m.state = StateStreaming
 	m.thinkingIdx = 0
 	m.refreshViewport()
 
-	// View() output covers header + viewport + input + footer; the
-	// footer ALSO says "Thinking..." in streaming mode, so we can't
-	// just grep the whole frame for that token. Pull the viewport
+	// View() covers header + viewport + input + footer; the footer
+	// ALSO says "Thinking..." in streaming mode, so pull the viewport
 	// region directly to assert the chat-window indicator.
 	body := stripANSI(m.viewport.View())
 	if !strings.Contains(body, "Thinking...") {
-		t.Errorf("expected anchor phrase 'Thinking…' in viewport while streaming; got:\n%s", body)
+		t.Errorf("expected anchor phrase 'Thinking...' in viewport while streaming with no in-progress assistant; got:\n%s", body)
 	}
 
 	// Rotate and verify the next phrase shows up after a refresh.
@@ -82,15 +79,29 @@ func TestRenderMessage_StreamingPlaceholderShowsThinking(t *testing.T) {
 		t.Errorf("expected rotated phrase %q in viewport; got:\n%s", thinkingPhrases[1], body)
 	}
 
-	// Once a chunk lands, the indicator must give way to the response.
-	m.history.AppendText(1, "actual response text")
+	// Once a chunk arrives the assistant message is created and the
+	// indicator at the bottom of the chat must give way to the
+	// response text.
+	idx := m.history.Append(Message{Role: RoleAssistant, Text: "actual response text"})
+	m.currentAssistantIdx = idx
 	m.refreshViewport()
 	body = stripANSI(m.viewport.View())
 	if strings.Contains(body, "Thinking...") || strings.Contains(body, thinkingPhrases[1]) {
-		t.Errorf("thinking indicator should be hidden once the assistant message has content; got:\n%s", body)
+		t.Errorf("thinking indicator should be hidden once an assistant segment has content; got:\n%s", body)
 	}
 	if !strings.Contains(body, "actual response text") {
 		t.Errorf("response text should be visible after first chunk; got:\n%s", body)
+	}
+
+	// Simulate a tool call closing the segment: clear currentAssistantIdx
+	// and append a tool entry. The thinking indicator MUST come back at
+	// the bottom while we wait for the next assistant segment.
+	m.history.Append(Message{Role: RoleTool, Text: "bash · $ ls"})
+	m.currentAssistantIdx = -1
+	m.refreshViewport()
+	body = stripANSI(m.viewport.View())
+	if !strings.Contains(body, "Thinking...") && !strings.Contains(body, thinkingPhrases[1]) {
+		t.Errorf("thinking indicator should reappear after a tool call closes the previous segment; got:\n%s", body)
 	}
 }
 

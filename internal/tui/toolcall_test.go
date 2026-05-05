@@ -93,6 +93,68 @@ func TestRenderMessage_ToolCallShowsIconAndName(t *testing.T) {
 	}
 }
 
+// TestUpdate_ToolCallSplitsAssistantSegments pins the layout fix from
+// the dogfood report: tool calls and the assistant chunks that arrive
+// AFTER them must show up *below* the tool line in the chat, not
+// pinned beneath the assistant text. Concretely:
+//
+//   - Assistant text "before tool" lands in segment A.
+//   - Tool call appended -> segment A is closed (Glamour-rendered, idx
+//     reset).
+//   - Assistant text "after tool" lands in a NEW segment B.
+//   - History order ends up: user, assistant("before tool"),
+//     tool, assistant("after tool").
+//
+// Without this, the user sees the model's response permanently above
+// every tool call and permission prompt of the turn — the bug the
+// user reported as "tool calls and permissions are pinned to the
+// bottom of the viewport".
+//
+// DO NOT silence this test. Re-introducing the pre-created assistant
+// placeholder, or letting handleStreamChunk dump everything into one
+// message regardless of intervening tool calls, brings the bug back.
+func TestUpdate_ToolCallSplitsAssistantSegments(t *testing.T) {
+	t.Parallel()
+	cfg := config.DefaultConfig()
+	m := NewModel(cfg, nil, "dark")
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 24})
+
+	// Simulate a turn: state=streaming, no assistant placeholder.
+	m.state = StateStreaming
+	m.currentAssistantIdx = -1
+	m.history.Append(Message{Role: RoleUser, Text: "list files"})
+
+	// First chunk lands BEFORE any tool call.
+	m.Update(streamChunkMsg{Text: "I'll list them for you."})
+	// Tool call closes that segment.
+	m.Update(toolCallMsg{Name: "bash", Args: map[string]any{"command": "ls"}})
+	// Next chunk MUST start a new assistant message below the tool.
+	m.Update(streamChunkMsg{Text: "Here are the files."})
+
+	got := m.history.Snapshot()
+	if len(got) < 4 {
+		t.Fatalf("expected at least 4 history entries (user, assistant1, tool, assistant2); got %d:\n%+v", len(got), got)
+	}
+	wantRoles := []Role{RoleUser, RoleAssistant, RoleTool, RoleAssistant}
+	for i, want := range wantRoles {
+		if got[i].Role != want {
+			t.Errorf("history[%d].Role = %v; want %v\nfull history: %+v", i, got[i].Role, want, got)
+		}
+	}
+	// First assistant segment carries the "before tool" text.
+	if !strings.Contains(got[1].Text, "I'll list them for you") {
+		t.Errorf("history[1] should hold pre-tool assistant text; got %q", got[1].Text)
+	}
+	// Second assistant segment carries the "after tool" text.
+	if !strings.Contains(got[3].Text, "Here are the files") {
+		t.Errorf("history[3] should hold post-tool assistant text; got %q", got[3].Text)
+	}
+	// The pre-tool segment must NOT have absorbed the post-tool text.
+	if strings.Contains(got[1].Text, "Here are the files") {
+		t.Errorf("history[1] absorbed post-tool text; should have been closed when the tool call landed. got: %q", got[1].Text)
+	}
+}
+
 // TestUpdate_ToolCallMsgAppendsHistory pins the wiring from agent
 // goroutine to chat history: a toolCallMsg that arrives in Update
 // MUST cause a RoleTool entry to land in m.history with the formatted

@@ -104,11 +104,20 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case streamChunkMsg:
 		return m.handleStreamChunk(msg)
 	case toolCallMsg:
-		// Append the tool call as its own history entry. The chat renders
-		// it with the ⚙ icon + accent style so the user sees the agent's
-		// actions interleaved with its prose. The thinking-indicator
-		// placeholder is left alone — it gives way to the next text
-		// chunk on its own.
+		// Tool calls split the assistant's response into segments. Close
+		// out the in-progress assistant message (if any) so the next
+		// streaming chunks land in a fresh assistant message *below*
+		// this tool line. Without this the tool call appears under
+		// the assistant text forever and chunks that arrive after the
+		// tool look out of order.
+		if m.currentAssistantIdx >= 0 {
+			cur := m.history.Snapshot()[m.currentAssistantIdx]
+			if cur.Text != "" {
+				rendered := strings.TrimRight(m.md.Render(cur.Text), "\n")
+				m.history.SetRendered(m.currentAssistantIdx, rendered)
+			}
+			m.currentAssistantIdx = -1
+		}
 		m.history.Append(Message{Role: RoleTool, Text: formatToolCall(msg.Name, msg.Args)})
 		m.refreshViewport()
 		return m, nil
@@ -619,8 +628,14 @@ func (m *Model) handleSubmit() (tea.Model, tea.Cmd) {
 	}
 	m.textarea.Reset()
 	m.palette = nil
-	idx := m.history.Append(Message{Role: RoleAssistant})
-	m.currentAssistantIdx = idx
+	// Don't pre-create an assistant placeholder. The first text chunk
+	// (handleStreamChunk) lazily creates one; tool calls that arrive
+	// before any text aren't pinned beneath an empty placeholder.
+	// Every tool call closes the current assistant segment so the
+	// NEXT chunk starts a fresh assistant message below the tool
+	// line — that's how the user sees the model's response after the
+	// tool calls / permission prompts, not above them.
+	m.currentAssistantIdx = -1
 	m.state = StateStreaming
 	// Reset the thinking-phrase rotator so every turn starts on the
 	// anchor phrase ("Thinking…") and the cycle is predictable.
@@ -807,8 +822,17 @@ func (m *Model) switchModel(modelID string) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) handleStreamChunk(msg streamChunkMsg) (tea.Model, tea.Cmd) {
-	if m.currentAssistantIdx < 0 {
+	// Outside a streaming turn the chunk is stale — drop it.
+	if m.state != StateStreaming {
 		return m, nil
+	}
+	// Lazily create the assistant message on the first chunk of each
+	// segment. handleSubmit clears currentAssistantIdx so the very
+	// first chunk of a turn lands here, and toolCallMsg clears it
+	// again so chunks after a tool call start a new message below
+	// the tool line.
+	if m.currentAssistantIdx < 0 {
+		m.currentAssistantIdx = m.history.Append(Message{Role: RoleAssistant})
 	}
 	m.history.AppendText(m.currentAssistantIdx, msg.Text)
 	m.refreshViewport()
