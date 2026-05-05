@@ -111,6 +111,10 @@ type Model struct {
 	// modelPicker is the open Model picker overlay, if any.
 	modelPicker *modelPickerState
 
+	// permissionsPicker is the open /permissions overlay, if any. See
+	// permissions_picker.go for layout + key handling.
+	permissionsPicker *permissionsPicker
+
 	// mcpServers + skills carry the discovered extensibility for
 	// /mcp + /skills rendering. Both are nil-safe.
 	mcpServers []*mcp.Server
@@ -153,6 +157,19 @@ type Model struct {
 	// that persists the pattern to .agents/config.json. May be nil in
 	// tests.
 	AlwaysAllow func(req permissions.PromptRequest) error
+
+	// SessionApprovals returns the gate's chronological approval log
+	// for the current session. Used by the /permissions slash command
+	// to drive the recommendation picker. May be nil in tests; in
+	// that case /permissions reports nothing-to-review.
+	SessionApprovals func() []permissions.ApprovalLog
+
+	// PersistAllowPatterns appends one or more allowlist patterns to
+	// .agents/config.json's permissions.allow block. The picker calls
+	// it when the user confirms their selection. May be nil when
+	// running without a project root; the picker reports the lack of
+	// persistence to the user as a system message.
+	PersistAllowPatterns func(patterns []string) error
 }
 
 // NewModel constructs a fresh chat session bound to a configured agent.

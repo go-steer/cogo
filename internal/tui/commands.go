@@ -9,36 +9,39 @@ import "strings"
 type SlashAction string
 
 const (
-	SlashHelp    SlashAction = "help"
-	SlashClear   SlashAction = "clear"
-	SlashQuit    SlashAction = "quit"
-	SlashMemory  SlashAction = "memory"
-	SlashStats   SlashAction = "stats"
-	SlashModel   SlashAction = "model"
-	SlashMCP     SlashAction = "mcp"
-	SlashSkills  SlashAction = "skills"
-	SlashReload  SlashAction = "reload"
-	SlashMouse   SlashAction = "mouse"
-	SlashUnknown SlashAction = "unknown"
+	SlashHelp        SlashAction = "help"
+	SlashClear       SlashAction = "clear"
+	SlashQuit        SlashAction = "quit"
+	SlashMemory      SlashAction = "memory"
+	SlashStats       SlashAction = "stats"
+	SlashModel       SlashAction = "model"
+	SlashMCP         SlashAction = "mcp"
+	SlashSkills      SlashAction = "skills"
+	SlashReload      SlashAction = "reload"
+	SlashMouse       SlashAction = "mouse"
+	SlashPermissions SlashAction = "permissions"
+	SlashUnknown     SlashAction = "unknown"
 )
 
 // Slash command names accepted in V1. /mcp + /skills + /init join in
 // Slice 4b alongside MCP, skills, and the init wizard.
 var slashAliases = map[string]SlashAction{
-	"help":   SlashHelp,
-	"?":      SlashHelp,
-	"clear":  SlashClear,
-	"quit":   SlashQuit,
-	"exit":   SlashQuit,
-	"q":      SlashQuit,
-	"memory": SlashMemory,
-	"stats":  SlashStats,
-	"model":  SlashModel,
-	"models": SlashModel,
-	"mcp":    SlashMCP,
-	"skills": SlashSkills,
-	"reload": SlashReload,
-	"mouse":  SlashMouse,
+	"help":        SlashHelp,
+	"?":           SlashHelp,
+	"clear":       SlashClear,
+	"quit":        SlashQuit,
+	"exit":        SlashQuit,
+	"q":           SlashQuit,
+	"memory":      SlashMemory,
+	"stats":       SlashStats,
+	"model":       SlashModel,
+	"models":      SlashModel,
+	"mcp":         SlashMCP,
+	"skills":      SlashSkills,
+	"reload":      SlashReload,
+	"mouse":       SlashMouse,
+	"permissions": SlashPermissions,
+	"perms":       SlashPermissions,
 }
 
 // ParseSlash inspects input. If it looks like a slash command (leading
@@ -96,6 +99,7 @@ func HelpText() string {
 		"  /skills     show discovered skills",
 		"  /reload     re-read .agents/ from disk (mcp.json, skills/, AGENTS.md, config.json)",
 		"  /mouse      toggle mouse-wheel scrolling (or /mouse on|off)",
+		"  /permissions  review session approvals + add recommended allowlist entries (alias: /perms)",
 		"",
 		"Keys:",
 		"  PgUp/PgDn   scroll chat history",

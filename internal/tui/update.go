@@ -63,6 +63,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.modelPicker != nil {
 			return m.handleModelPickerKey(msg)
 		}
+		// Permissions review picker takes the same precedence as the
+		// model picker — it replaces the input area while open.
+		if m.permissionsPicker != nil {
+			return m.handlePermissionsPickerKey(msg)
+		}
 		return m.handleKey(msg)
 	case confirmReqMsg:
 		// Show modal; remember the request so handleConfirmKey can
@@ -682,6 +687,8 @@ func (m *Model) handleSlash(action SlashAction, cmd, args string) (tea.Model, te
 		return m.handleReload()
 	case SlashMouse:
 		return m.handleMouseCommand(args)
+	case SlashPermissions:
+		return m.handlePermissionsCommand()
 	case SlashModel:
 		return m.handleModelCommand(args)
 	case SlashQuit:
@@ -838,6 +845,73 @@ func (m *Model) handleStreamChunk(msg streamChunkMsg) (tea.Model, tea.Cmd) {
 	}
 	m.history.AppendText(m.currentAssistantIdx, msg.Text)
 	m.refreshViewport()
+	return m, nil
+}
+
+// handlePermissionsCommand opens the /permissions review picker.
+// With no approval log yet, it short-circuits to a system message
+// so the user isn't met with an empty modal.
+func (m *Model) handlePermissionsCommand() (tea.Model, tea.Cmd) {
+	if m.SessionApprovals == nil {
+		m.history.Append(Message{Role: RoleSystem, Text: "Permissions review unavailable: this build has no session approval log wired up."})
+		m.refreshViewport()
+		return m, nil
+	}
+	approvals := m.SessionApprovals()
+	picker := newPermissionsPicker(approvals)
+	if picker == nil {
+		m.history.Append(Message{Role: RoleSystem, Text: "No interactive approvals this session yet — there's nothing to review."})
+		m.refreshViewport()
+		return m, nil
+	}
+	m.permissionsPicker = picker
+	return m, nil
+}
+
+// handlePermissionsPickerKey runs while the /permissions overlay is
+// open. Up/Down navigate; Space toggles the row; Enter persists the
+// selected patterns; Esc dismisses.
+func (m *Model) handlePermissionsPickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.permissionsPicker == nil {
+		return m, nil
+	}
+	p := m.permissionsPicker
+	switch msg.String() {
+	case "up":
+		if p.cursor > 0 {
+			p.cursor--
+		}
+	case "down":
+		if p.cursor < len(p.recs)-1 {
+			p.cursor++
+		}
+	case " ":
+		if p.cursor >= 0 && p.cursor < len(p.selected) {
+			p.selected[p.cursor] = !p.selected[p.cursor]
+		}
+	case "esc":
+		m.permissionsPicker = nil
+	case "enter":
+		patterns := p.chosenPatterns()
+		m.permissionsPicker = nil
+		if len(patterns) == 0 {
+			m.history.Append(Message{Role: RoleSystem, Text: "Permissions review closed without persisting anything."})
+			m.refreshViewport()
+			return m, nil
+		}
+		if m.PersistAllowPatterns == nil {
+			m.history.Append(Message{Role: RoleError, Text: "Can't persist allowlist entries: no project root for .agents/config.json. Run cogo from a directory with an .agents/ folder."})
+			m.refreshViewport()
+			return m, nil
+		}
+		if err := m.PersistAllowPatterns(patterns); err != nil {
+			m.history.Append(Message{Role: RoleError, Text: "Persist failed: " + err.Error()})
+			m.refreshViewport()
+			return m, nil
+		}
+		m.history.Append(Message{Role: RoleSystem, Text: "Added to .agents/config.json permissions.allow:\n  " + strings.Join(patterns, "\n  ")})
+		m.refreshViewport()
+	}
 	return m, nil
 }
 

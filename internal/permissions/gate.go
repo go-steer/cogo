@@ -8,9 +8,21 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/go-steer/cogo/internal/config"
 )
+
+// ApprovalLog is one entry in the gate's per-session approval audit.
+// It records every interactive permission decision the user made
+// (excluding denials) so the TUI can later offer a "review approvals
+// + recommend" workflow via the /permissions slash command.
+type ApprovalLog struct {
+	Tool     string
+	Key      string
+	Decision Decision
+	At       time.Time
+}
 
 // Mode mirrors the permission modes documented in REQUIREMENTS §3.10.
 type Mode string
@@ -46,6 +58,11 @@ type Gate struct {
 	// call regardless of path"). Bash denylist still applies — that
 	// pre-check runs before the gate ever sees the request.
 	sessionAllowTools map[string]struct{}
+
+	// Chronological log of every non-deny interactive approval. Surfaces
+	// via Approvals() so /permissions can recommend allowlist entries
+	// based on what the user actually approved this session.
+	approvals []ApprovalLog
 }
 
 // Options configures a Gate at construction time. All fields are
@@ -236,9 +253,11 @@ func (g *Gate) prompt(ctx context.Context, req PromptRequest) error {
 	}
 	switch d {
 	case DecisionAllowOnce:
+		g.recordApproval(req.ToolName, req.Detail, d)
 		return nil
 	case DecisionAllowSession:
 		g.rememberSession(req.ToolName, req.Detail)
+		g.recordApproval(req.ToolName, req.Detail, d)
 		return nil
 	case DecisionAllowSessionTool:
 		// "Trust the whole tool for this session." We remember the
@@ -246,6 +265,7 @@ func (g *Gate) prompt(ctx context.Context, req PromptRequest) error {
 		// doesn't re-prompt before the tool-wide entry takes effect.
 		g.rememberSessionTool(req.ToolName)
 		g.rememberSession(req.ToolName, req.Detail)
+		g.recordApproval(req.ToolName, req.Detail, d)
 		return nil
 	case DecisionAllowAlways:
 		// Caller (e.g. TUI host) is responsible for persisting the
@@ -256,6 +276,7 @@ func (g *Gate) prompt(ctx context.Context, req PromptRequest) error {
 		if req.Kind == PromptKindPathScope {
 			g.scope.AddAlwaysAllow(req.PersistKey)
 		}
+		g.recordApproval(req.ToolName, req.Detail, d)
 		return nil
 	default:
 		return fmt.Errorf("%s denied by user: %s", req.ToolName, req.Detail)
@@ -288,4 +309,28 @@ func (g *Gate) rememberSessionTool(toolName string) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.sessionAllowTools[toolName] = struct{}{}
+}
+
+// recordApproval appends an interactive approval to the session's
+// audit log. /permissions reads this back to recommend allowlist
+// entries based on what the user actually approved.
+func (g *Gate) recordApproval(toolName, key string, d Decision) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.approvals = append(g.approvals, ApprovalLog{
+		Tool:     toolName,
+		Key:      key,
+		Decision: d,
+		At:       time.Now(),
+	})
+}
+
+// Approvals returns a defensive copy of the in-session approval log.
+// Order is chronological. Safe for concurrent callers.
+func (g *Gate) Approvals() []ApprovalLog {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	out := make([]ApprovalLog, len(g.approvals))
+	copy(out, g.approvals)
+	return out
 }
