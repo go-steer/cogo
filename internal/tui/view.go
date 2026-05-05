@@ -337,7 +337,15 @@ func (m *Model) renderFooter() string {
 	case m.pendingConfirm != nil:
 		return m.styles.Footer.Render("Permission required — choose one of the keys above")
 	case m.state == StateStreaming:
-		return m.styles.Footer.Render(m.spinner.View() + " Thinking… (Ctrl+C to cancel)")
+		// Render the brand-cyan parts (spinner glyph + "Thinking...") as
+		// SEPARATE Render() calls and concatenate. Wrapping them in a
+		// single brand.Render() is wrong: the spinner's own styled
+		// output already ends with a `\x1b[0m` reset, which cancels the
+		// outer brand wrap and leaves "Thinking..." in default color
+		// (the bug users reported as "Thinking is no longer cyan").
+		brand := lipgloss.NewStyle().Foreground(brandCyan).Bold(true)
+		return m.spinner.View() + " " + brand.Render("Thinking...") + " " +
+			m.styles.Footer.Render("(Ctrl+C to cancel)")
 	case m.confirmingClear:
 		return m.styles.Confirm.Render("Confirm clear: type y / yes / anything else")
 	default:
