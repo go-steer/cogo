@@ -3,8 +3,6 @@
 
 package tui
 
-import "github.com/charmbracelet/lipgloss"
-
 // thinkingTickInterval is how long each cheeky thinking phrase stays
 // on screen before the next one rotates in. Three seconds is long
 // enough to read without effort and short enough that the indicator
@@ -51,15 +49,20 @@ func thinkingPhrase(idx int) string {
 }
 
 // renderThinkingLine builds the in-chat thinking indicator. The
-// rotating phrase IS the animation — no spinner glyph or fancy prefix
-// is added so the line is pure ASCII text wrapped in a single bold +
-// brand-cyan style. Two earlier attempts (animated spinner + styled
-// phrase as separate spans, then `▶` + styled phrase as one span)
-// reported "I see the spinner but no text" / "only the last letter
-// shows" on VS Code's integrated terminal. Both regressed on either
-// nested-style ANSI seams or non-ASCII glyphs that the terminal
-// failed to render. Pure ASCII + a single styled span avoids both.
+// rotating phrase is styled via the existing m.styles.System path
+// (italic + a muted/system color via lipgloss.AdaptiveColor).
+//
+// Long history (see PR #65 thread): every fixed-color or raw-ANSI
+// styling we tried got swallowed by the user's VS Code terminal
+// renderer — italic+cyan via lipgloss, bold+cyan with a `▶` prefix,
+// raw `\x1b[1;3;36m`, etc. The only thing that visibly worked on
+// that host was the existing System / Assistant lipgloss styles
+// (which use AdaptiveColor and apparently survive whatever path
+// transformation the host is doing).
+//
+// "System" gives us italic + a system color out of the box, which
+// matches the user's "color and maybe italics" ask without re-
+// introducing the styling that consistently broke.
 func (m *Model) renderThinkingLine() string {
-	return lipgloss.NewStyle().Foreground(brandCyan).Bold(true).
-		Render(thinkingPhrase(m.thinkingIdx))
+	return m.styles.System.Render(thinkingPhrase(m.thinkingIdx))
 }
