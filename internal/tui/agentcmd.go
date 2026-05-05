@@ -27,6 +27,11 @@ type programSender interface {
 func startAgentTurn(ctx context.Context, send programSender, a *agent.Agent, prompt string) {
 	go func() {
 		var lastIn, lastOut int
+		// ADK can emit the same FunctionCall on more than one event
+		// (e.g., a partial streaming event followed by the committed
+		// non-partial event). Deduping by FunctionCall.ID keeps the
+		// chat from showing every tool invocation twice.
+		seenToolCallIDs := make(map[string]bool)
 		for event, err := range a.Run(ctx, prompt) {
 			if err != nil {
 				if lastIn > 0 || lastOut > 0 {
@@ -46,17 +51,27 @@ func startAgentTurn(ctx context.Context, send programSender, a *agent.Agent, pro
 			if event.Content == nil {
 				continue
 			}
-			// Tool invocations arrive on non-Partial events with a
-			// FunctionCall part. Surface each one to the chat as its
-			// own line so the user sees the agent's actions
-			// interleaved with the streaming prose.
+			// Surface each unique tool invocation to the chat. Dedupe
+			// on FunctionCall.ID so we don't emit the same call twice
+			// when ADK echoes it across partial + committed events.
+			// Calls without an ID are emitted unconditionally — a
+			// missing ID is rare but a tool line is more useful than
+			// a silent drop.
 			for _, p := range event.Content.Parts {
-				if p.FunctionCall != nil && p.FunctionCall.Name != "" {
-					send.Send(toolCallMsg{
-						Name: p.FunctionCall.Name,
-						Args: p.FunctionCall.Args,
-					})
+				if p.FunctionCall == nil || p.FunctionCall.Name == "" {
+					continue
 				}
+				id := p.FunctionCall.ID
+				if id != "" && seenToolCallIDs[id] {
+					continue
+				}
+				if id != "" {
+					seenToolCallIDs[id] = true
+				}
+				send.Send(toolCallMsg{
+					Name: p.FunctionCall.Name,
+					Args: p.FunctionCall.Args,
+				})
 			}
 			if !event.Partial {
 				continue
