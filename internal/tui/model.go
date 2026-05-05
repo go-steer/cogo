@@ -14,6 +14,7 @@ import (
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/muesli/reflow/wordwrap"
 
 	"github.com/go-steer/cogo/internal/agent"
 	"github.com/go-steer/cogo/internal/config"
@@ -230,7 +231,11 @@ func (m *Model) renderMessage(msg Message) string {
 	switch msg.Role {
 	case RoleUser:
 		prefix := m.styles.UserPrefix.Render("❯")
-		return prefix + " " + m.styles.UserText.Render(msg.Display())
+		// Wrap the prompt at the viewport width so long messages
+		// don't run off the right edge. Continuation lines are
+		// indented to align with the text after the "❯ " prefix.
+		wrapped := wrapForChat(msg.Display(), m.viewport.Width-2, "  ")
+		return prefix + " " + m.styles.UserText.Render(wrapped)
 	case RoleAssistant:
 		// Display() prefers the Glamour-rendered form when available;
 		// during streaming it falls back to raw text.
@@ -244,8 +249,10 @@ func (m *Model) renderMessage(msg Message) string {
 			if m.state == StateStreaming && text == "" {
 				return m.renderThinkingLine()
 			}
-			// Streaming: render raw with the assistant style for color.
-			return m.styles.Assistant.Render(text)
+			// Streaming: wrap raw text at viewport width so long
+			// chunks don't overflow before Glamour gets to re-render
+			// the finalized message.
+			return m.styles.Assistant.Render(wrapForChat(text, m.viewport.Width, ""))
 		}
 		// Append a per-prompt usage footer when available.
 		if footer := m.lastTurnUsageFooter(); footer != "" {
@@ -253,12 +260,32 @@ func (m *Model) renderMessage(msg Message) string {
 		}
 		return text
 	case RoleSystem:
-		return m.styles.System.Render("ℹ  " + msg.Display())
+		return m.styles.System.Render(wrapForChat("ℹ  "+msg.Display(), m.viewport.Width, "   "))
 	case RoleError:
-		return m.styles.Error.Render("⚠  " + msg.Display())
+		return m.styles.Error.Render(wrapForChat("⚠  "+msg.Display(), m.viewport.Width, "   "))
 	default:
 		return msg.Display()
 	}
+}
+
+// wrapForChat word-wraps text to fit inside a chat line of the given
+// visible width. Continuation lines are prefixed with `indent` so they
+// align past the role's leading glyph (e.g. "❯ " -> indent "  "). When
+// width <= 0 (pre-resize) the original text is returned untouched so
+// callers don't have to special-case the boot path.
+func wrapForChat(text string, width int, indent string) string {
+	if width <= 0 {
+		return text
+	}
+	wrapped := wordwrap.String(text, width)
+	if indent == "" {
+		return wrapped
+	}
+	lines := strings.Split(wrapped, "\n")
+	for i := 1; i < len(lines); i++ {
+		lines[i] = indent + lines[i]
+	}
+	return strings.Join(lines, "\n")
 }
 
 // lastTurnUsageFooter renders the most recent turn's usage as a small
