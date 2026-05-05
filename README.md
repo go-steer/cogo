@@ -161,6 +161,21 @@ Skills follow Claude Code's bundle layout — drop `.agents/skills/<name>/SKILL.
 - **Session transcripts** — every interactive session writes `.agents/sessions/<timestamp>.json` on exit, with the full message log and usage totals.
 - **Debug logs** — `cogo --debug -p "..."` swaps the slog handler to a JSONL writer under `.agents/logs/<timestamp>.jsonl` for after-the-fact inspection.
 
+## Troubleshooting
+
+### VS Code integrated terminal: random characters disappear
+
+If you run cogo inside VS Code's integrated terminal and see characters dropping out of typed input or rendered output — most often the CSI command terminators (`D`, `b`, `n` are the usual suspects, but other letters can vanish too) — you're hitting a known interaction between Bubble Tea's escape sequences and VS Code's WebGL terminal renderer.
+
+The fix is one VS Code setting, not a cogo config:
+
+1. `⌘+,` (or `Ctrl+,`) to open Settings.
+2. Search for `gpuAcceleration`.
+3. Change **Terminal › Integrated: Gpu Acceleration** from `auto` to `canvas`.
+4. Close and reopen the terminal panel and rerun cogo.
+
+If `canvas` doesn't fully resolve it, try `off`. The perf cost in either case is invisible for an interactive TUI like cogo. This isn't cogo-specific — most Bubble Tea TUIs hit the same WebGL renderer bug.
+
 ## Development
 
 The full local CI pipeline lives under [`dev/`](./dev/) and is the same source of truth as the GitHub Actions workflow. Quick start:
