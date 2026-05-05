@@ -40,6 +40,12 @@ type Gate struct {
 	// DecisionAllowSession choices so we don't re-prompt the same call
 	// repeatedly within one session.
 	sessionAllow map[string]struct{}
+	// Tool-wide in-session allow set, keyed by tool name only.
+	// Populated by DecisionAllowSessionTool when the user trusts an
+	// entire tool for the rest of the session ("allow every read_file
+	// call regardless of path"). Bash denylist still applies — that
+	// pre-check runs before the gate ever sees the request.
+	sessionAllowTools map[string]struct{}
 }
 
 // Options configures a Gate at construction time. All fields are
@@ -64,11 +70,12 @@ func New(opts Options) *Gate {
 		opts.Scope, _ = NewPathScope("", "", nil)
 	}
 	return &Gate{
-		mode:         opts.Mode,
-		policy:       opts.Policy,
-		scope:        opts.Scope,
-		prompter:     opts.Prompter,
-		sessionAllow: make(map[string]struct{}),
+		mode:              opts.Mode,
+		policy:            opts.Policy,
+		scope:             opts.Scope,
+		prompter:          opts.Prompter,
+		sessionAllow:      make(map[string]struct{}),
+		sessionAllowTools: make(map[string]struct{}),
 	}
 }
 
@@ -124,6 +131,12 @@ func (g *Gate) CheckBash(ctx context.Context, command string) error {
 // fails if the path is out of scope (and the user can't or won't
 // extend scope).
 func (g *Gate) CheckFileRead(ctx context.Context, toolName, path string) error {
+	// "Allow this tool · session" trusts the tool entirely for the
+	// session, including out-of-scope paths. Short-circuit before the
+	// scope check so the user doesn't get re-prompted.
+	if g.sessionToolAllowed(toolName) {
+		return nil
+	}
 	in, err := g.scope.Contains(path)
 	if err != nil {
 		return err
@@ -138,6 +151,12 @@ func (g *Gate) CheckFileRead(ctx context.Context, toolName, path string) error {
 // are escalated via prompt; in-scope paths still go through mode-aware
 // approval (ask mode prompts; allow/yolo proceed unless deny rule hits).
 func (g *Gate) CheckFileWrite(ctx context.Context, toolName, path string) error {
+	// "Allow this tool · session" trusts the tool entirely (mirrors
+	// CheckFileRead). The user opted in explicitly for the rest of
+	// the session.
+	if g.sessionToolAllowed(toolName) {
+		return nil
+	}
 	in, err := g.scope.Contains(path)
 	if err != nil {
 		return err
@@ -155,6 +174,12 @@ func (g *Gate) gateRequest(ctx context.Context, kind PromptKind, toolName, key, 
 	case OutcomeDeny:
 		return fmt.Errorf("%s denied by config policy: %q", toolName, key)
 	case OutcomeAllow:
+		return nil
+	}
+	// Tool-wide session allow short-circuits before per-key session
+	// allow so a user who picked "allow this tool · session" never
+	// sees another modal for the same tool.
+	if g.sessionToolAllowed(toolName) {
 		return nil
 	}
 	if g.sessionAllowed(toolName, key) {
@@ -215,6 +240,13 @@ func (g *Gate) prompt(ctx context.Context, req PromptRequest) error {
 	case DecisionAllowSession:
 		g.rememberSession(req.ToolName, req.Detail)
 		return nil
+	case DecisionAllowSessionTool:
+		// "Trust the whole tool for this session." We remember the
+		// per-key entry too so any in-flight retry of the same call
+		// doesn't re-prompt before the tool-wide entry takes effect.
+		g.rememberSessionTool(req.ToolName)
+		g.rememberSession(req.ToolName, req.Detail)
+		return nil
 	case DecisionAllowAlways:
 		// Caller (e.g. TUI host) is responsible for persisting the
 		// pattern via the config layer; the gate also remembers it
@@ -241,4 +273,19 @@ func (g *Gate) rememberSession(toolName, key string) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.sessionAllow[toolName+"|"+key] = struct{}{}
+}
+
+// sessionToolAllowed reports whether the user has trusted toolName
+// entirely for this session via DecisionAllowSessionTool.
+func (g *Gate) sessionToolAllowed(toolName string) bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	_, ok := g.sessionAllowTools[toolName]
+	return ok
+}
+
+func (g *Gate) rememberSessionTool(toolName string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.sessionAllowTools[toolName] = struct{}{}
 }

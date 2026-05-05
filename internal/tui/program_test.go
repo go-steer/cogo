@@ -453,7 +453,7 @@ func TestProgram_PermissionModalApprovesAndDenies(t *testing.T) {
 	// Modal should appear in the rendered output.
 	teatest.WaitFor(t, tm.Output(), func(o []byte) bool {
 		return bytes.Contains(o, []byte("git push origin main")) &&
-			bytes.Contains(o, []byte("[y] allow once"))
+			bytes.Contains(o, []byte("[y] once"))
 	}, teatest.WithDuration(2*time.Second))
 
 	// Approve once.

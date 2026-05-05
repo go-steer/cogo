@@ -235,7 +235,7 @@ func (m *Model) renderConfirmModal() string {
 		kindLabel = "Tool"
 	}
 	body := m.styles.Confirm.Render(kindLabel+": "+req.Detail) + "\n" +
-		m.styles.Footer.Render("[y] allow once   [s] allow session   [a] always allow   [n/esc] deny")
+		m.styles.Footer.Render("[y] once  [s] this call · session  [t] this tool · session  [a] always (persist)  [n/esc] deny")
 	return m.styles.InputBorder.Render(body)
 }
 
