@@ -15,6 +15,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/muesli/reflow/wordwrap"
+	"github.com/muesli/reflow/wrap"
 
 	"github.com/go-steer/cogo/internal/agent"
 	"github.com/go-steer/cogo/internal/config"
@@ -273,11 +274,17 @@ func (m *Model) renderMessage(msg Message) string {
 // align past the role's leading glyph (e.g. "❯ " -> indent "  "). When
 // width <= 0 (pre-resize) the original text is returned untouched so
 // callers don't have to special-case the boot path.
+//
+// muesli/reflow's wordwrap respects word boundaries and never breaks a
+// single mega-word — a long URL or token would still overflow. Chain
+// it with reflow's wrap (force-break at column) so the over-long
+// fragments left by wordwrap also get split. wordwrap first to
+// preserve word boundaries where possible; wrap second to mop up.
 func wrapForChat(text string, width int, indent string) string {
 	if width <= 0 {
 		return text
 	}
-	wrapped := wordwrap.String(text, width)
+	wrapped := wrap.String(wordwrap.String(text, width), width)
 	if indent == "" {
 		return wrapped
 	}
