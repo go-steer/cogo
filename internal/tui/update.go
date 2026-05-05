@@ -170,6 +170,8 @@ func (m *Model) handleConfirmKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		d = permissions.DecisionAllowOnce
 	case key.Matches(msg, m.keys.ConfirmAllowSession):
 		d = permissions.DecisionAllowSession
+	case key.Matches(msg, m.keys.ConfirmAllowSessionTool):
+		d = permissions.DecisionAllowSessionTool
 	case key.Matches(msg, m.keys.ConfirmAllowAlways):
 		d = permissions.DecisionAllowAlways
 	case key.Matches(msg, m.keys.ConfirmDeny):

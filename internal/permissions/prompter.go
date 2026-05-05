@@ -12,10 +12,11 @@ import (
 type Decision int
 
 const (
-	DecisionDeny         Decision = iota // reject this call
-	DecisionAllowOnce                    // allow this call, ask again next time
-	DecisionAllowSession                 // allow this exact request for the rest of the session
-	DecisionAllowAlways                  // persist a permanent allowlist entry, then allow
+	DecisionDeny             Decision = iota // reject this call
+	DecisionAllowOnce                        // allow this call, ask again next time
+	DecisionAllowSession                     // allow this exact request for the rest of the session
+	DecisionAllowSessionTool                 // allow EVERY call to this tool for the rest of the session, regardless of args
+	DecisionAllowAlways                      // persist a permanent allowlist entry, then allow
 )
 
 // String renders Decision for diagnostics.
@@ -27,6 +28,8 @@ func (d Decision) String() string {
 		return "allow-once"
 	case DecisionAllowSession:
 		return "allow-session"
+	case DecisionAllowSessionTool:
+		return "allow-session-tool"
 	case DecisionAllowAlways:
 		return "allow-always"
 	default:

@@ -20,10 +20,11 @@ type KeyMap struct {
 
 	// Permission modal: y allow once, n deny, s allow for the session,
 	// a allow always (persisted).
-	ConfirmAllowOnce    key.Binding
-	ConfirmDeny         key.Binding
-	ConfirmAllowSession key.Binding
-	ConfirmAllowAlways  key.Binding
+	ConfirmAllowOnce        key.Binding
+	ConfirmDeny             key.Binding
+	ConfirmAllowSession     key.Binding
+	ConfirmAllowSessionTool key.Binding
+	ConfirmAllowAlways      key.Binding
 }
 
 // DefaultKeyMap returns Cogo's V1 bindings.
@@ -75,7 +76,11 @@ func DefaultKeyMap() KeyMap {
 		),
 		ConfirmAllowSession: key.NewBinding(
 			key.WithKeys("s"),
-			key.WithHelp("s", "allow for this session"),
+			key.WithHelp("s", "allow this call for the session"),
+		),
+		ConfirmAllowSessionTool: key.NewBinding(
+			key.WithKeys("t"),
+			key.WithHelp("t", "allow this tool for the session"),
 		),
 		ConfirmAllowAlways: key.NewBinding(
 			key.WithKeys("a"),
