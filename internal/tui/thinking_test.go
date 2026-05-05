@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 
 	"github.com/go-steer/cogo/internal/config"
 )
@@ -91,6 +93,43 @@ func TestRenderMessage_StreamingPlaceholderShowsThinking(t *testing.T) {
 	}
 	if !strings.Contains(body, "actual response text") {
 		t.Errorf("response text should be visible after first chunk; got:\n%s", body)
+	}
+}
+
+// TestRenderThinkingLine_NoItalic pins the visibility contract for the
+// in-chat indicator: the rotating phrase must NOT be styled with
+// italic (SGR 3). VS Code's integrated terminal — among others —
+// silently drops italic spans depending on the font, which surfaced as
+// "I see the spinner but no text" in v0.1.2 dogfood. Bold + foreground
+// color is the most portable visible styling.
+//
+// DO NOT silence this test if it breaks. Re-enabling italic on the
+// indicator brings back a real bug that hides the affordance from a
+// large chunk of the user base on dev-friendly terminal hosts.
+func TestRenderThinkingLine_NoItalic(t *testing.T) {
+	// Force truecolor so lipgloss actually emits ANSI; in the default
+	// test profile lipgloss is a no-op and there'd be no SGR codes to
+	// inspect, defeating the test. Not parallel because we mutate the
+	// process-global lipgloss color profile.
+	prev := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	defer lipgloss.SetColorProfile(prev)
+
+	cfg := config.DefaultConfig()
+	m := NewModel(cfg, nil, "dark")
+	m.thinkingIdx = 0
+	out := m.renderThinkingLine()
+	// SGR 3 is the italic flag. Match either the standalone `\x1b[3m`
+	// form or the parameterized `;3;` / `\x1b[3;` forms that lipgloss
+	// emits when combining italic with foreground/bold.
+	for _, marker := range []string{"\x1b[3m", "\x1b[3;", ";3;", ";3m"} {
+		if strings.Contains(out, marker) {
+			t.Errorf("renderThinkingLine() emitted italic SGR %q; would render invisible on VS Code/xterm.js terminals.\nraw: %q", marker, out)
+		}
+	}
+	// Sanity: the phrase still has to be in there.
+	if !strings.Contains(stripANSI(out), "Thinking…") {
+		t.Errorf("renderThinkingLine() lost the phrase; got: %q", out)
 	}
 }
 

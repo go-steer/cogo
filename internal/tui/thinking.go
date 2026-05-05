@@ -54,8 +54,14 @@ func thinkingPhrase(idx int) string {
 // the spinner glyph (already brand-cyan from styles.Spinner via
 // model.go wiring) with the rotating phrase, so the chat indicator
 // reads as the same "system is working" affordance as the footer.
+//
+// The phrase is rendered with bold + brand cyan (no italic). VS Code's
+// integrated terminal — and a handful of other xterm.js-based hosts —
+// silently drop italic spans depending on the configured font, which
+// produced reports of "I see the spinner but no text" in the wild.
+// Bold + foreground color is the most portable visible styling.
 func (m *Model) renderThinkingLine() string {
 	phrase := thinkingPhrase(m.thinkingIdx)
-	style := lipgloss.NewStyle().Foreground(brandCyan).Italic(true)
+	style := lipgloss.NewStyle().Foreground(brandCyan).Bold(true)
 	return m.spinner.View() + " " + style.Render(phrase)
 }
